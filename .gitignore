@@ -1,0 +1,29 @@
+# === PYTHON BACKEND ===
+__pycache__/
+*.py[cod]
+venv/
+backend/.env
+backend/venv/
+backend/__pycache__/
+backend/*.log
+
+# === FRONTEND (React / React Native) ===
+node_modules/
+frontend/**/node_modules/
+frontend/**/build/
+frontend/**/dist/
+frontend/**/.next/
+
+# === ENV FILES ===
+.env
+*.env
+!.env.example
+
+# === OS / EDITOR FILES ===
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# === GENERAL ===
+*.log
