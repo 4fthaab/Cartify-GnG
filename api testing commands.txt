@@ -1,0 +1,432 @@
+Perfect ✅ — this is the **full system validation workflow** — start to finish — exactly like your *real shopping cart session* on the demo Raspberry Pi.
+
+We’ll simulate it **step-by-step** via Swagger (`http://127.0.0.1:8000/docs`), using real example JSON for each stage.
+You can literally copy–paste each one in order and watch your MongoDB Atlas update live.
+
+---
+
+# 🧩 TEST WORKFLOW OVERVIEW
+
+**Sequence:**
+1️⃣ `/cart/login` → Link cart and user
+2️⃣ `/shopping-list/create` → Upload item list
+3️⃣ `/path/optimize` → Generate optimized path for store
+4️⃣ `/cart/detect` + `/cart/weight` → Add 3 items to cart
+5️⃣ `/cart/detect_remove` + `/cart/weight_remove` → Remove 1 item
+6️⃣ `/cart/view` → Verify final cart contents
+7️⃣ `/cart/checkout` → Checkout and generate receipt link
+8️⃣ `/cart/receipt/{order_id}` → View receipt
+9️⃣ `/cart/logout` → Clear temp data
+
+---
+
+## 🧾 Step 1: `/cart/login`
+
+**Purpose:** Link the physical cart (CART102) with user (U123) and store layout (STORE001)
+
+```
+POST /cart/login
+```
+
+**Body:**
+
+```json
+{
+  "cart_id": "CART102",
+  "user_id": "U123",
+  "store_id": "STORE001"
+}
+```
+
+✅ **Expected Response:**
+
+```json
+{
+  "cart_id": "CART102",
+  "user_id": "U123",
+  "linked": true,
+  "login_time": "2025-11-06T18:45:00Z"
+}
+```
+
+---
+
+## 🧾 Step 2: `/shopping-list/create`
+
+**Purpose:** User uploads shopping list (10 items)
+
+```
+POST /shopping-list/create
+```
+
+**Body:**
+
+```json
+{
+  "user_id": "U123",
+  "list_id": "U123L1",
+  "items": [
+    {"name": "Apple"},
+    {"name": "Banana"},
+    {"name": "Brush"},
+    {"name": "Bucket"},
+    {"name": "Onion"},
+    {"name": "Toothpaste"},
+    {"name": "Mug"},
+    {"name": "Towel"},
+    {"name": "Watermelon"},
+    {"name": "Tomato"}
+  ]
+}
+```
+
+✅ **Expected Response:**
+
+```json
+{
+  "list_id": "U123L1",
+  "status": "created",
+  "pending_items": 10
+}
+```
+
+---
+
+## 🧾 Step 3: `/path/optimize`
+
+**Purpose:** Generate optimized in-store walking path based on rack–row–col logic.
+
+```
+POST /path/optimize
+```
+
+**Body:**
+
+```json
+{
+  "user_id": "U123",
+  "store_id": "STORE001",
+  "list_id": "U123L1"
+}
+```
+
+✅ **Expected Response:**
+
+```json
+{
+  "optimized_path": [
+    "Tomato (R2c3)",
+    "Apple (R1c4)",
+    "Banana (R1c9)",
+    "Onion (R2c9)",
+    "Watermelon (R1c10)",
+    "Bucket (R4c23)",
+    "Brush (R3c15)",
+    "Mug (R4c10)",
+    "Towel (R3c5)"
+  ]
+}
+```
+
+---
+
+## 🧾 Step 4: Add 3 items (camera + weight)
+
+**Purpose:** Simulate adding 3 items into the cart.
+
+---
+
+### 4.1️⃣ Add *Brush*
+
+```
+POST /cart/detect
+```
+
+```json
+{
+  "cart_id": "CART102",
+  "detected_label": "Brush",
+  "camera_confidence": 0.93
+}
+```
+
+Response:
+
+```json
+{
+  "detection_id": "D001",
+  "candidate_items": [...],
+  "status": "awaiting_weight"
+}
+```
+
+→ copy `"detection_id": "D001"` and use in next:
+
+```
+POST /cart/weight
+```
+
+```json
+{
+  "cart_id": "CART102",
+  "detection_id": "D001",
+  "weight_g": 52
+}
+```
+
+✅ Response:
+`status: "verified"`, and cart now contains Brush.
+
+---
+
+### 4.2️⃣ Add *Apple*
+
+```
+POST /cart/detect
+```
+
+```json
+{
+  "cart_id": "CART102",
+  "detected_label": "Apple",
+  "camera_confidence": 0.95
+}
+```
+
+Response → `"detection_id": "D002"`
+
+Then:
+
+```
+POST /cart/weight
+```
+
+```json
+{
+  "cart_id": "CART102",
+  "detection_id": "D002",
+  "weight_g": 198
+}
+```
+
+✅ Adds Apple (200g) verified.
+
+---
+
+### 4.3️⃣ Add *Bucket*
+
+```
+POST /cart/detect
+```
+
+```json
+{
+  "cart_id": "CART102",
+  "detected_label": "Bucket",
+  "camera_confidence": 0.92
+}
+```
+
+→ `"detection_id": "D003"`
+
+Then:
+
+```
+POST /cart/weight
+```
+
+```json
+{
+  "cart_id": "CART102",
+  "detection_id": "D003",
+  "weight_g": 805
+}
+```
+
+✅ Adds Bucket (800g) verified.
+
+---
+
+## 🧾 Step 5: Remove 1 item
+
+**Simulate removing the Brush**
+
+### 5.1️⃣ Detect removal
+
+```
+POST /cart/detect_remove
+```
+
+```json
+{
+  "cart_id": "CART102",
+  "detected_label": "Brush",
+  "camera_confidence": 0.9
+}
+```
+
+→ `"detection_id": "R001"`
+
+Then:
+
+```
+POST /cart/weight_remove
+```
+
+```json
+{
+  "cart_id": "CART102",
+  "detection_id": "R001",
+  "weight_g": 50
+}
+```
+
+✅ Response:
+
+```json
+{
+  "status": "removed",
+  "matched_item": {
+    "item_id": "ITEM003",
+    "name": "Brush",
+    "price": 25
+  },
+  "cart_items": [
+    {"item_id": "ITEM001","name": "Apple","price": 50},
+    {"item_id": "ITEM004","name": "Bucket","price": 100}
+  ]
+}
+```
+
+---
+
+## 🧾 Step 6: View final cart
+
+```
+GET /cart/view/CART102
+```
+
+✅ Expected:
+
+```json
+{
+  "cart_id": "CART102",
+  "items": [
+    {"item_id": "ITEM001","name": "Apple","price": 50,"qty": 1},
+    {"item_id": "ITEM004","name": "Bucket","price": 100,"qty": 1}
+  ],
+  "total_items": 2,
+  "total_price": 150
+}
+```
+
+---
+
+## 🧾 Step 7: Checkout
+
+```
+POST /cart/checkout
+```
+
+```json
+{
+  "cart_id": "CART102",
+  "user_id": "U123"
+}
+```
+
+✅ Response:
+
+```json
+{
+  "message": "Checkout completed successfully",
+  "order_id": "ORD-CART102-1730907000",
+  "total_price": 150,
+  "receipt_url": "/cart/receipt/ORD-CART102-1730907000"
+}
+```
+
+---
+
+## 🧾 Step 8: View receipt
+
+```
+GET /cart/receipt/ORD-CART102-1730907000
+```
+
+✅ Response:
+
+```json
+{
+  "order_id": "ORD-CART102-1730907000",
+  "user_id": "U123",
+  "checkout_time": "2025-11-06T19:10:00Z",
+  "items": [
+    {"item_id": "ITEM001","name": "Apple","price": 50},
+    {"item_id": "ITEM004","name": "Bucket","price": 100}
+  ],
+  "total_items": 2,
+  "total_price": 150,
+  "status": "completed"
+}
+```
+
+---
+
+## 🧾 Step 9: Logout / Cleanup
+
+```
+POST /cart/logout
+```
+
+```json
+{
+  "cart_id": "CART102"
+}
+```
+
+✅ Response:
+
+```json
+{
+  "message": "Cart CART102 session cleared successfully."
+}
+```
+
+Check in Atlas:
+
+* ✅ `carts` → removed
+* ✅ `detections` → removed
+* ✅ `orders` → retained for 15 mins (then TTL expiry)
+
+---
+
+## 💡 Optional final validation
+
+After logout, try `GET /cart/view/CART102` →
+It should return:
+
+```json
+{
+  "cart_id": "CART102",
+  "items": []
+}
+```
+
+---
+
+## 🏁 That’s your full backend test flow
+
+You now have a **production-ready backend simulation** for:
+
+* User-cart linking
+* Store map path generation
+* Camera–weight synchronization
+* Cart addition + removal
+* Checkout + receipt generation
+* Session cleanup + TTL-based data expiry
+
+---
+
+Would you like me to help you next by adding the **automatic receipt PDF generator** (so clicking `/receipt/{id}` triggers PDF download)?
+That’ll be perfect for the user app’s “Print Bill” feature.
