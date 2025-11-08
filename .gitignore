@@ -6,6 +6,9 @@ backend/.env
 backend/venv/
 backend/__pycache__/
 backend/*.log
+backend/tools/
+backend/tools/apitest.txt
+
 
 # === FRONTEND (React / React Native) ===
 node_modules/
@@ -27,3 +30,4 @@ Thumbs.db
 
 # === GENERAL ===
 *.log
+

@@ -2,20 +2,29 @@ from datetime import datetime
 
 def decide_match(det_doc):
     """
-    det_doc contains:
-      - candidate_items: list of items (each has 'weight_g')
-      - weight_readings: list of readings (may be appended)
-    Returns dict with status and matched_item (if verified)
+    Decide matched item based on weight reading and item type.
+    Supports both 'fixed' and 'variable' weight items.
     """
     readings = det_doc.get("weight_readings", []) or []
     if not readings:
         return {"status": "awaiting_weight"}
 
-    # use median to reduce noise
     sorted_r = sorted(readings)
     median = sorted_r[len(sorted_r)//2]
     candidates = det_doc.get("candidate_items", [])
+    if not candidates:
+        return {"status": "failed"}
 
+    # 🧠 Step 1: Check if any candidate is a variable-weight item
+    variable_candidates = [c for c in candidates if c.get("weight_type") == "variable"]
+    if variable_candidates:
+        # For variable-weight items, we don’t verify — we confirm directly.
+        best = variable_candidates[0]
+        best["measured_weight_g"] = median
+        print(f"✅ Variable-weight item detected: {best.get('name')} | weight={median}g | unit_price_per_kg={best.get('unit_price_per_kg')}")
+        return {"status": "verified", "matched_item": best}
+
+    # 🧠 Step 2: Fixed-weight logic (existing)
     scores = []
     for c in candidates:
         expected = c.get("weight_g") or 0
@@ -24,19 +33,18 @@ def decide_match(det_doc):
         else:
             diff = abs(median - expected)
             rel = 1 - (diff / expected)
-            score = rel  # between -inf and 1
+            score = rel
         scores.append((c, score))
 
-    # pick best
     best, best_score = max(scores, key=lambda x: x[1]) if scores else (None, 0)
-    # thresholds (tune in testing)
     if best_score >= 0.7:
-        return {"status":"verified","matched_item": best}
+        print(f"✅ Fixed-weight match: {best.get('name')} | expected={best.get('weight_g')}g | measured={median}g")
+        return {"status": "verified", "matched_item": best}
     elif best_score >= 0.45:
-        # ambiguous - return candidates for UI confirmation
-        return {"status":"ambiguous","candidates":[c for c,s in scores]}
+        return {"status": "ambiguous", "candidates": [c for c,s in scores]}
     else:
-        return {"status":"failed"}
+        return {"status": "failed"}
+
 
 def decide_removal(det_doc, cart_id=None):
     """
@@ -92,4 +100,3 @@ def decide_removal(det_doc, cart_id=None):
         return {"status": "ambiguous", "candidates": [c for c,s in scores]}
     else:
         return {"status": "failed"}
-

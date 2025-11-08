@@ -43,111 +43,84 @@ def cart_detect(payload: dict):
     db["detections"].insert_one(det_doc)
     return {"detection_id": detection_id, "candidate_items": candidates, "status":"awaiting_weight", "timeout_ms": 7000}
 
-
 @router.post("/weight")
-def cart_weight(payload: dict):
-    db = get_db()
-    detection_id = payload.get("detection_id")
+def update_cart_weight(payload: dict):
     cart_id = payload.get("cart_id")
+    detection_id = payload.get("detection_id")
+    reading = payload.get("weight_g")
 
-    # Mode A: cart_total_weight provided (scale sends total weight)
-    if "cart_total_weight" in payload:
-        new_total = payload.get("cart_total_weight")
-        # For an add flow: we know detection->candidate contains single or multiple candidates.
-        det = db["detections"].find_one({"detection_id": detection_id})
-        if not det:
-            return {"error": "detection not found"}
+    db = get_db()
 
-        # try to decide which candidate fits the delta: new_total - old_total == candidate.weight (approx)
-        cart = db["carts"].find_one({"cart_id": cart_id}) or {"cart_id": cart_id, "items": [], "total_weight": 0}
-        old_total = cart.get("total_weight", 0)
+    # find detection document
+    det_doc = db["detections"].find_one({"detection_id": detection_id})
+    if not det_doc:
+        return {"status": "error", "message": "Detection not found"}
 
-        # Compute delta
-        delta = new_total - old_total
+    # append weight reading
+    db["detections"].update_one({"detection_id": detection_id}, {"$push": {"weight_readings": reading}})
+    det_doc["weight_readings"] = det_doc.get("weight_readings", []) + [reading]
 
-        # find candidate whose weight matches delta within tolerance
-        candidates = det.get("candidate_items", [])
-        matched = None
-        for c in candidates:
-            expected = c.get("weight_g", 0)
-            # tolerance: 20% absolute or +/-10 g min (tunable)
-            tol = max(0.15 * expected, 10)
-            if abs(delta - expected) <= tol:
-                matched = c
-                break
-
-        if matched:
-            # Add to cart
-            cart_item = {
-                "item_id": matched.get("item_id"),
-                "name": matched.get("name"),
-                "price": matched.get("price"),
-                "qty": 1,
-                "weight_g": matched.get("weight_g"),
-                "added_at": datetime.utcnow().isoformat(),
-                "confirmed": True
-            }
-            db["carts"].update_one({"cart_id": cart_id}, {"$push": {"items": cart_item}, "$set": {"total_weight": new_total}}, upsert=True)
-            db["detections"].update_one({"detection_id": detection_id}, {"$set": {"status": "verified", "matched_item": matched}})
-            return {"status": "verified", "matched_item": matched, "cart_item": cart_item, "total_weight": new_total}
-        else:
-            # Not matched by delta; fallback to previous logic (append reading & use verifier)
-            db["detections"].update_one({"detection_id": detection_id}, {"$push": {"weight_readings": new_total}})
-            det = db["detections"].find_one({"detection_id": detection_id})
-            from services.verifier import decide_match
-            result = decide_match(det)
-            if result.get("status") == "verified":
-                matched = result["matched_item"]
-                cart_item = {
-                    "item_id": matched.get("item_id"),
-                    "name": matched.get("name"),
-                    "price": matched.get("price"),
-                    "qty": 1,
-                    "weight_g": matched.get("weight_g"),
-                    "added_at": datetime.utcnow().isoformat(),
-                    "confirmed": True
-                }
-                # update total weight by adding expected weight
-                new_total_calc = cart.get("total_weight", 0) + matched.get("weight_g", 0)
-                db["carts"].update_one({"cart_id": cart_id}, {"$push": {"items": cart_item}, "$set": {"total_weight": new_total_calc}}, upsert=True)
-                db["detections"].update_one({"detection_id": detection_id}, {"$set": {"status":"verified", "matched_item": matched}})
-                return {"status":"verified", "matched_item": matched, "cart_item": cart_item, "total_weight": new_total_calc}
-            else:
-                return {"status": result.get("status"), "candidates": result.get("candidates", [])}
-
-    # Mode B: legacy item-weight mode (single item weight provided)
-    weight = payload.get("weight_g")
-    if weight is None:
-        return {"error": "No weight provided"}
-
-    det = db["detections"].find_one({"detection_id": detection_id})
-    if not det:
-        return {"error": "detection not found"}
-
-    db["detections"].update_one({"detection_id": detection_id}, {"$push": {"weight_readings": weight}})
-    det = db["detections"].find_one({"detection_id": detection_id})
     from services.verifier import decide_match
-    result = decide_match(det)
-
-    if result.get("status") == "verified":
-        matched = result["matched_item"]
-        cart_item = {
-            "item_id": matched.get("item_id"),
-            "name": matched.get("name"),
-            "price": matched.get("price"),
-            "qty": 1,
-            "weight_g": matched.get("weight_g"),
-            "added_at": datetime.utcnow().isoformat(),
-            "confirmed": True
-        }
-        # update cart total weight
-        cart = db["carts"].find_one({"cart_id": cart_id}) or {"cart_id": cart_id, "items": [], "total_weight": 0}
-        new_total = cart.get("total_weight", 0) + matched.get("weight_g", 0)
-        db["carts"].update_one({"cart_id": cart_id}, {"$push": {"items": cart_item}, "$set": {"total_weight": new_total}}, upsert=True)
-        db["detections"].update_one({"detection_id": detection_id}, {"$set": {"status":"verified", "matched_item": matched}})
-        return {"status":"verified", "matched_item": matched, "cart_item": cart_item, "total_weight": new_total}
-    else:
+    result = decide_match(det_doc)
+    if result.get("status") != "verified":
         return {"status": result.get("status"), "candidates": result.get("candidates", [])}
+
+    matched_item = result.get("matched_item")
+    weight_type = matched_item.get("weight_type", "fixed")
+
+    # 🧮 Calculate price and weight contribution
+    if weight_type == "variable":
+        item_weight_g = matched_item.get("measured_weight_g", 0)
+        price_per_kg = matched_item.get("unit_price_per_kg", 0)
+        item_price = round((item_weight_g / 1000) * price_per_kg, 2)
+    else:
+        item_weight_g = matched_item.get("weight_g", 0)
+        item_price = matched_item.get("price", 0)
+
+    cart_item = {
+        "item_id": matched_item.get("item_id"),
+        "name": matched_item.get("name"),
+        "weight_g": item_weight_g,
+        "unit_price_per_kg": matched_item.get("unit_price_per_kg", None),
+        "price": item_price,
+        "qty": 1,
+        "added_at": datetime.utcnow().isoformat(),
+        "confirmed": True
+    }
+
+    # update cart collection
+    cart = db["carts"].find_one({"cart_id": cart_id}) or {"cart_id": cart_id, "items": [], "total_weight": 0, "total_price": 0}
+    total_weight = cart.get("total_weight", 0) + item_weight_g
+    total_price = cart.get("total_price", 0) + item_price
+    items = cart.get("items", []) + [cart_item]
+
+    db["carts"].update_one(
+        {"cart_id": cart_id},
+        {"$set": {
+            "items": items,
+            "total_items": len(items),
+            "total_weight": total_weight,
+            "total_price": total_price
+        }},
+        upsert=True
+    )
+
+    # update stock (optional, future task)
+    db["items"].update_one(
+        {"item_id": matched_item.get("item_id")},
+        {"$inc": {"stock_qty": -item_weight_g if weight_type == "variable" else -1}}
+    )
+
+    return {
+        "status": "verified",
+        "matched_item": matched_item,
+        "cart_item": cart_item,
+        "cart_summary": {
+            "total_items": len(items),
+            "total_weight_g": total_weight,
+            "total_price": total_price
+        }
+    }
 
 @router.get("/view/{cart_id}")
 def view_cart(cart_id: str):
@@ -342,3 +315,43 @@ def cart_logout(payload: dict):
     db["carts"].delete_one({"cart_id": cart_id})
     db["detections"].delete_many({"cart_id": cart_id})
     return {"message": f"Cart {cart_id} session cleared successfully."}
+
+from services.weight_monitor import process_weight_event
+from utils.db import get_db
+from datetime import datetime
+
+@router.post("/weight_event")
+def simulate_weight_event(payload: dict):
+    """
+    Simulate a weight change event (used in testing instead of live sensor)
+    Example payload:
+    {
+      "cart_id": "CART102",
+      "new_weight_g": 350
+    }
+    """
+    cart_id = payload.get("cart_id")
+    new_weight = payload.get("new_weight_g", 0)
+
+    db = get_db()
+    cart = db["carts"].find_one({"cart_id": cart_id}) or {}
+    last_weight = cart.get("total_weight", 0)
+
+    result = process_weight_event(new_weight, last_weight)
+
+    # optional: log fraud events
+    if result.get("alert"):
+        db["alerts"].insert_one({
+            "cart_id": cart_id,
+            "timestamp": datetime.utcnow().isoformat(),
+            "delta_g": result["delta_g"],
+            "status": "active"
+        })
+
+    return {
+        "cart_id": cart_id,
+        "last_weight": last_weight,
+        "new_weight": new_weight,
+        "alert_state": result["alert"],
+        "delta_g": result["delta_g"]
+    }
