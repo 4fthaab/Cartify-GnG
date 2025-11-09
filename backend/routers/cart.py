@@ -7,6 +7,19 @@ from fastapi.responses import JSONResponse
 from services.matcher import match_items
 from services.verifier import decide_match, decide_removal
 import pdfkit
+from bson import ObjectId
+
+def convert_objectid(obj):
+    """Recursively convert ObjectId and nested values to strings for JSON-safe responses."""
+    if isinstance(obj, list):
+        return [convert_objectid(i) for i in obj]
+    elif isinstance(obj, dict):
+        return {k: convert_objectid(v) for k, v in obj.items()}
+    elif isinstance(obj, ObjectId):
+        return str(obj)
+    else:
+        return obj
+
 
 router = APIRouter(prefix="/cart", tags=["Cart"])
 
@@ -44,23 +57,26 @@ def cart_detect(payload: dict):
     return {"detection_id": detection_id, "candidate_items": candidates, "status":"awaiting_weight", "timeout_ms": 7000}
 
 @router.post("/weight")
+@router.post("/weight")
 def update_cart_weight(payload: dict):
+    from services.verifier import decide_match
+    from utils.db import get_db
+
+    db = get_db()
     cart_id = payload.get("cart_id")
     detection_id = payload.get("detection_id")
     reading = payload.get("weight_g")
 
-    db = get_db()
-
-    # find detection document
+    # 1️⃣ Validate detection
     det_doc = db["detections"].find_one({"detection_id": detection_id})
     if not det_doc:
         return {"status": "error", "message": "Detection not found"}
 
-    # append weight reading
+    # 2️⃣ Append new weight reading
     db["detections"].update_one({"detection_id": detection_id}, {"$push": {"weight_readings": reading}})
     det_doc["weight_readings"] = det_doc.get("weight_readings", []) + [reading]
 
-    from services.verifier import decide_match
+    # 3️⃣ Decide which item matched
     result = decide_match(det_doc)
     if result.get("status") != "verified":
         return {"status": result.get("status"), "candidates": result.get("candidates", [])}
@@ -68,9 +84,9 @@ def update_cart_weight(payload: dict):
     matched_item = result.get("matched_item")
     weight_type = matched_item.get("weight_type", "fixed")
 
-    # 🧮 Calculate price and weight contribution
+    # 4️⃣ Compute weight & price
     if weight_type == "variable":
-        item_weight_g = matched_item.get("measured_weight_g", 0)
+        item_weight_g = reading  # take actual measured weight
         price_per_kg = matched_item.get("unit_price_per_kg", 0)
         item_price = round((item_weight_g / 1000) * price_per_kg, 2)
     else:
@@ -88,7 +104,7 @@ def update_cart_weight(payload: dict):
         "confirmed": True
     }
 
-    # update cart collection
+    # 5️⃣ Update cart
     cart = db["carts"].find_one({"cart_id": cart_id}) or {"cart_id": cart_id, "items": [], "total_weight": 0, "total_price": 0}
     total_weight = cart.get("total_weight", 0) + item_weight_g
     total_price = cart.get("total_price", 0) + item_price
@@ -105,11 +121,50 @@ def update_cart_weight(payload: dict):
         upsert=True
     )
 
-    # update stock (optional, future task)
+    # 6️⃣ Update stock
     db["items"].update_one(
         {"item_id": matched_item.get("item_id")},
         {"$inc": {"stock_qty": -item_weight_g if weight_type == "variable" else -1}}
     )
+
+    # 7️⃣ Auto mark in linked shopping list
+    cart_data = db["carts"].find_one({"cart_id": cart_id})
+    linked_user_id = cart_data.get("linked_user_id")
+    linked_list_id = cart_data.get("linked_list_id")
+    detected_label = (det_doc.get("detected_label") or matched_item.get("name", "")).lower()
+
+    if linked_user_id and linked_list_id:
+        matched_name = matched_item.get("name")
+        label_variants = [v.lower() for v in matched_item.get("label_variants", [])]
+        all_aliases = label_variants + [matched_name.lower()]
+
+        # 🧾 Update user's shopping list
+        shopping_list = db["shopping_lists"].find_one({"user_id": linked_user_id, "list_id": linked_list_id})
+        if shopping_list:
+            updated_items = []
+            matched_any = False
+            for item in shopping_list["items"]:
+                item_name_lower = item["name"].lower().strip()
+                # ✅ Match against all aliases (full or partial)
+                if any(alias in item_name_lower or item_name_lower in alias for alias in all_aliases):
+                    item["bought"] = True
+                    matched_any = True
+                updated_items.append(item)
+            db["shopping_lists"].update_one(
+                {"user_id": linked_user_id, "list_id": linked_list_id},
+                {"$set": {"items": updated_items}}
+            )
+
+    # 🧾 Update cart user_list_items
+    cart_user_items = cart_data.get("user_list_items", [])
+    new_cart_user_items = []
+    for ui in cart_user_items:
+        ui_name = ui["name"].lower().strip()
+        if any(alias in ui_name or ui_name in alias for alias in all_aliases):
+            ui["bought"] = True
+        new_cart_user_items.append(ui)
+
+    db["carts"].update_one({"cart_id": cart_id}, {"$set": {"user_list_items": new_cart_user_items}})
 
     return {
         "status": "verified",
@@ -119,7 +174,8 @@ def update_cart_weight(payload: dict):
             "total_items": len(items),
             "total_weight_g": total_weight,
             "total_price": total_price
-        }
+        },
+        "auto_marked_in_list": bool(linked_user_id and linked_list_id)
     }
 
 @router.get("/view/{cart_id}")
@@ -243,44 +299,91 @@ def cart_weight_remove(payload: dict):
             return {"status": res.get("status"), "candidates": res.get("candidates", [])}
 
 @router.post("/checkout")
-def cart_checkout(payload: dict):
+def checkout_cart(payload: dict):
     """
-    User finishes shopping — finalize cart into orders and retain it for receipt.
-    Payload: { "cart_id": "CART102", "user_id": "U123" }
+    Finalize the cart, create order record, initiate mock payment,
+    and return QR info for payment.
     """
+    from utils.db import get_db
+    from datetime import datetime
+    import requests  # to call our mock payment endpoint locally
+    from bson import ObjectId
+
     db = get_db()
     cart_id = payload.get("cart_id")
-    user_id = payload.get("user_id")
+    payment_method = payload.get("payment_method", "upi")
+
+    if not cart_id:
+        return {"error": "cart_id required"}
 
     cart = db["carts"].find_one({"cart_id": cart_id})
-    if not cart or not cart.get("items"):
-        return {"error": "Cart empty or not found"}
+    if not cart:
+        return {"error": "Cart not found"}
 
-    # Calculate totals
-    total_price = sum(item.get("price", 0) * item.get("qty", 1) for item in cart["items"])
-    total_items = len(cart["items"])
+    checkout_time = datetime.utcnow().isoformat()
 
+    db["carts"].update_one(
+        {"cart_id": cart_id},
+        {"$set": {"checked_out": True, "checkout_time": checkout_time, "linked": False}}
+    )
+
+    user_id = cart.get("linked_user_id")
+    store_id = cart.get("store_id")
+    total_price = cart.get("total_price", 0)
+
+    # 🧾 Create a pending order
+    order_id = f"ORD{int(datetime.utcnow().timestamp())}"
     order_doc = {
-        "order_id": f"ORD-{cart_id}-{int(datetime.utcnow().timestamp())}",
-        "cart_id": cart_id,
+        "order_id": order_id,
         "user_id": user_id,
-        "items": cart["items"],
-        "total_items": total_items,
+        "cart_id": cart_id,
+        "store_id": store_id,
+        "items": cart.get("items", []),
+        "total_items": cart.get("total_items", 0),
         "total_price": total_price,
-        "checkout_time": datetime.utcnow().isoformat(),
-        "status": "completed",
-        "expire_at": (datetime.utcnow() + timedelta(minutes=15)).isoformat()  # retain 15 mins
+        "total_weight_g": cart.get("total_weight", 0),
+        "created_at": checkout_time,
+        "status": "pending_payment",
+        "payment_status": "pending",
+        "payment_method": payment_method
     }
-
     db["orders"].insert_one(order_doc)
-    db["carts"].update_one({"cart_id": cart_id}, {"$set": {"status": "checked_out"}})
-    db["detections"].update_many({"cart_id": cart_id}, {"$set": {"status": "archived"}})
+
+    # 🧩 Auto-initiate mock payment session (internal API call)
+    try:
+        payment_resp = requests.post(
+            "http://127.0.0.1:8000/mock-payment/create",
+            json={
+                "order_id": order_id,
+                "amount": total_price,
+                "currency": "INR"
+            },
+            timeout=5
+        )
+        payment_data = payment_resp.json()
+    except Exception as e:
+        payment_data = {"error": f"Payment initiation failed: {str(e)}"}
+
+    # Return both order & payment info to frontend
+    def clean(obj):
+        if isinstance(obj, ObjectId):
+            return str(obj)
+        elif isinstance(obj, list):
+            return [clean(o) for o in obj]
+        elif isinstance(obj, dict):
+            return {k: clean(v) for k, v in obj.items()}
+        return obj
 
     return {
-        "message": "Checkout completed successfully",
-        "order_id": order_doc["order_id"],
-        "total_price": total_price,
-        "receipt_url": f"/cart/receipt/{order_doc['order_id']}"
+        "message": "Checkout initiated. Proceed to payment.",
+        "order_id": order_id,
+        "order_status": "pending_payment",
+        "payment_session": payment_data,
+        "order_summary": {
+            "total_items": cart.get("total_items", 0),
+            "total_price": total_price,
+            "store_id": store_id
+        }
     }
 
 @router.get("/receipt/{order_id}")

@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Body
 from utils.db import get_db
 from datetime import datetime
 import time
@@ -61,43 +61,69 @@ def create_shopping_list(payload: dict):
 
 # ✅ UPDATE LIST
 @router.post("/update")
-def update_shopping_list(payload: dict):
+@router.post("/update")
+def update_shopping_list(payload: dict = Body(...)):
+    """
+    Update shopping list after checkout or cart session end.
+    Keeps only not-bought or not-found items for reuse.
+    Expected payload:
+    {
+        "user_id": "USR123",
+        "list_id": "USR123_L1762675439",
+        "mode": "checkout"   # or "manual"
+    }
+    """
     db = get_db()
     user_id = payload.get("user_id")
     list_id = payload.get("list_id")
+    mode = payload.get("mode", "checkout")
 
-    if not user_id or not list_id:
-        return {"error": "Missing user_id or list_id"}
+    if not (user_id and list_id):
+        return {"error": "Missing required fields"}
 
-    existing = db["shopping_lists"].find_one({"user_id": user_id, "list_id": list_id})
-    if not existing:
-        return {"error": "List not found"}
+    shopping_list = db["shopping_lists"].find_one({"user_id": user_id, "list_id": list_id})
+    if not shopping_list:
+        return {"error": "Shopping list not found"}
 
-    update_data = {
-        "items": payload.get("items", existing.get("items")),
-        "updated_at": datetime.utcnow().isoformat()
+    old_items = shopping_list.get("items", [])
+    not_bought = [i for i in old_items if not i.get("bought")]
+    not_found = shopping_list.get("not_found", [])
+
+    new_items = not_bought + not_found
+
+    # Generate a new list_id for next session
+    timestamp = int(datetime.utcnow().timestamp())
+    new_list_id = f"{user_id}_L{timestamp}"
+
+    # Create new list for next session
+    new_list_doc = {
+        "user_id": user_id,
+        "list_id": new_list_id,
+        "items": new_items,
+        "created_at": datetime.utcnow().isoformat(),
+        "status": "pending",
+        "list_name": f"{shopping_list.get('list_name', 'My List')} (Next)"
     }
 
-    if payload.get("list_name"):
-        update_data["list_name"] = payload["list_name"]
+    db["shopping_lists"].insert_one(new_list_doc)
 
+    # Optional: archive the old list
     db["shopping_lists"].update_one(
         {"user_id": user_id, "list_id": list_id},
-        {"$set": update_data}
+        {"$set": {"status": "completed", "archived_at": datetime.utcnow().isoformat()}}
     )
 
-    # 🔗 Sync the user's shopping_lists entry
-    if "list_name" in update_data:
-        db["users"].update_one(
-            {"user_id": user_id, "shopping_lists.list_id": list_id},
-            {"$set": {"shopping_lists.$.list_name": update_data["list_name"]}}
-        )
+    # Optional: clear linked cart
+    db["carts"].update_many(
+        {"linked_user_id": user_id, "linked_list_id": list_id},
+        {"$set": {"linked": False, "checkout_time": datetime.utcnow().isoformat()}}
+    )
 
     return {
-        "message": "List updated successfully",
-        "user_id": user_id,
-        "list_id": list_id,
-        "updated_items": len(update_data["items"])
+        "message": "Shopping list finalized and next-session list created.",
+        "old_list_id": list_id,
+        "new_list_id": new_list_id,
+        "remaining_items_count": len(new_items)
     }
 
 
@@ -159,58 +185,86 @@ def select_shopping_list(payload: dict):
     }
 
 @router.post("/mark-item")
-def mark_item_as_bought(payload: dict):
+def mark_item_as_bought(payload: dict = Body(...)):
     """
-    Mark one or multiple items as bought in both shopping_list and linked cart.
+    Mark or unmark items in shopping list and linked cart using detected labels.
+
+    Expected payload:
     {
         "user_id": "USR123",
         "list_id": "USR123_L1730933212",
         "cart_id": "CART102",
-        "items": ["Lays", "Brush"]
+        "detected_label": "lays classic",
+        "action": "mark"   # or "unmark"
     }
     """
     db = get_db()
+
     user_id = payload.get("user_id")
     list_id = payload.get("list_id")
     cart_id = payload.get("cart_id")
-    items_to_mark = [i.lower().strip() for i in payload.get("items", [])]
+    detected_label = (payload.get("detected_label") or "").lower().strip()
+    action = payload.get("action", "mark").lower()
 
-    if not (user_id and list_id and cart_id and items_to_mark):
+    # Validate input
+    if not (user_id and list_id and cart_id and detected_label):
         return {"error": "Missing required fields"}
 
-    # 🧾 Update in shopping list
+    # 🧠 Step 1: Find item that matches detected label
+    matched_item = db["items"].find_one(
+        {"label_variants": {"$elemMatch": {"$regex": f"^{detected_label}$", "$options": "i"}}},
+        {"_id": 0, "name": 1, "label_variants": 1}
+    )
+    if not matched_item:
+        return {"error": f"No item found matching label: {detected_label}"}
+
+    matched_name = matched_item["name"]
+    label_variants = [v.lower() for v in matched_item.get("label_variants", [])]
+
+    # 🧾 Step 2: Fetch user's shopping list
     shopping_list = db["shopping_lists"].find_one({"user_id": user_id, "list_id": list_id})
     if not shopping_list:
         return {"error": "Shopping list not found"}
 
+    # Step 3: Find which item in list matches any variant
     updated_items = []
+    matched_list_entry = None
+
     for item in shopping_list["items"]:
-        if item["name"].lower() in items_to_mark:
-            item["bought"] = True
+        item_name_lower = item["name"].lower().strip()
+        if item_name_lower in label_variants or item_name_lower in matched_name.lower():
+            if action == "mark":
+                item["bought"] = True
+            elif action == "unmark":
+                item["bought"] = False
+            matched_list_entry = item["name"]
         updated_items.append(item)
 
+    if not matched_list_entry:
+        return {"message": "No matching item in user's list for detected label"}
+
+    # Step 4: Update shopping list
     db["shopping_lists"].update_one(
         {"user_id": user_id, "list_id": list_id},
         {"$set": {"items": updated_items}}
     )
 
-    # 🛒 Update in linked cart
+    # Step 5: Update in cart as well
     cart = db["carts"].find_one({"cart_id": cart_id})
     if cart and "user_list_items" in cart:
         new_cart_items = []
         for item in cart["user_list_items"]:
-            if item["name"].lower() in items_to_mark:
-                item["bought"] = True
+            if item["name"].lower() == matched_list_entry.lower():
+                item["bought"] = (True if action == "mark" else False)
             new_cart_items.append(item)
-
-        db["carts"].update_one(
-            {"cart_id": cart_id},
-            {"$set": {"user_list_items": new_cart_items}}
-        )
+        db["carts"].update_one({"cart_id": cart_id}, {"$set": {"user_list_items": new_cart_items}})
 
     return {
-        "message": "Items marked as bought successfully",
-        "marked_items": items_to_mark,
+        "message": f"Item successfully {'marked' if action=='mark' else 'unmarked'}",
+        "detected_label": detected_label,
+        "matched_name": matched_name,
+        "list_item_marked": matched_list_entry,
+        "action": action,
         "cart_id": cart_id,
         "list_id": list_id
     }

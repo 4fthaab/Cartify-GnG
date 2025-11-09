@@ -19,3 +19,5 @@ def get_db():
     if _db is None:
         connect_to_mongo()
     return _db
+
+

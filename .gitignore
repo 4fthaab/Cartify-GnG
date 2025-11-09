@@ -8,6 +8,7 @@ backend/__pycache__/
 backend/*.log
 backend/tools/
 backend/tools/apitest.txt
+backend/test_mongo.py
 
 
 # === FRONTEND (React / React Native) ===
