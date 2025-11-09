@@ -2,6 +2,7 @@ from fastapi import APIRouter, Body
 from utils.db import get_db
 from datetime import datetime
 import time
+from utils.cart_utils import is_cart_locked
 
 router = APIRouter(prefix="/shopping-list", tags=["Shopping List"])
 
@@ -203,6 +204,8 @@ def mark_item_as_bought(payload: dict = Body(...)):
     user_id = payload.get("user_id")
     list_id = payload.get("list_id")
     cart_id = payload.get("cart_id")
+    if is_cart_locked(cart_id):
+        return {"error": "Cart is locked. Checkout in progress or completed."}
     detected_label = (payload.get("detected_label") or "").lower().strip()
     action = payload.get("action", "mark").lower()
 

@@ -85,109 +85,92 @@ def payment_status(payment_id: str):
     return convert_objectid(p)
 
 @router.post("/complete")
-def complete_payment(payload: dict = Body(...)):
-    """
-    Simulate completing a payment (call this from mock-gpay clone or simulate click).
-    payload:
-    {
-      "payment_id": "PAY_xxx",
-      "method": "upi" | "card" | "card-debit" | "cod",
-      "payer_ref": "gpay_txn_123",   # optional reference id from the mock payer app
-      "status": "success" | "failed"
-    }
-    """
+def complete_payment(payload: dict):
+    from utils.db import get_db
+    from utils.cart_utils import unlock_cart
+    from datetime import datetime
+
     db = get_db()
     payment_id = payload.get("payment_id")
+    status = payload.get("status", "failed")
     method = payload.get("method", "upi")
     payer_ref = payload.get("payer_ref")
-    status = payload.get("status", "success")
 
     if not payment_id:
         return {"error": "payment_id required"}
 
-    p = db["payments"].find_one({"payment_id": payment_id})
-    if not p:
-        return {"error": "payment session not found"}
+    # Find payment record
+    payment_doc = db["payments"].find_one({"payment_id": payment_id})
+    if not payment_doc:
+        return {"error": "Invalid payment_id"}
 
-    new_status = "paid" if status == "success" else "failed"
-    completed_at = datetime.utcnow().isoformat()
+    order_id = payment_doc.get("order_id")
+    order_doc = db["orders"].find_one({"order_id": order_id})
+    if not order_doc:
+        return {"error": "Order not found for payment"}
 
-    db["payments"].update_one(
+    cart_id = order_doc.get("cart_id")  # ✅ define before unlock_cart()
+
+    # Update mock payment status
+    db["mock_payments"].update_one(
         {"payment_id": payment_id},
         {"$set": {
-            "status": new_status,
+            "status": status,
             "method": method,
             "payer_ref": payer_ref,
-            "completed_at": completed_at
+            "completed_at": datetime.utcnow().isoformat()
         }}
     )
 
-    # Update the order/cart if linked
-    order_id = p.get("order_id")
-    cart_id = p.get("cart_id")
-    amount = p.get("amount")
-
-    # If order exists, update order payment info
-    if order_id:
+    if status == "success":
+        # Update order status
         db["orders"].update_one(
             {"order_id": order_id},
             {"$set": {
-                "payment_status": "paid" if new_status == "paid" else "failed",
-                "payment_id": payment_id,
-                "payment_method": method
+                "status": "completed",
+                "payment_status": "paid",
+                "payment_method": method,
+                "paid_at": datetime.utcnow().isoformat(),
+                "payer_ref": payer_ref
             }}
         )
-        # also push receipt summary into user receipts if user_id present on order
-        order = db["orders"].find_one({"order_id": order_id})
-        if order and order.get("user_id"):
-            user_summary = {
-                "order_id": order_id,
-                "amount": order.get("total_price", amount),
-                "payment_method": method,
-                "payment_id": payment_id,
-                "checkout_time": completed_at,
-                "store_id": order.get("store_id"),
-                "status": "paid" if new_status == "paid" else "failed"
-            }
-            db["users"].update_one(
-                {"user_id": order.get("user_id")},
-                {"$push": {"receipts": user_summary}}
-            )
-    else:
-        # If only cart present, try to find order (if your flow creates order after checkout, use that)
+        from services.inventory_updater import deduct_stock_after_payment
+        stock_result = deduct_stock_after_payment(order_doc)
+
+        # Unlock cart for reuse
         if cart_id:
-            order = db["orders"].find_one({"cart_id": cart_id})
-            if order:
-                db["orders"].update_one(
-                    {"cart_id": cart_id},
-                    {"$set": {
-                        "payment_status": "paid" if new_status == "paid" else "failed",
+            unlock_cart(cart_id)
+
+        # Add receipt to user's account
+        user_id = order_doc.get("user_id")
+        if user_id:
+            db["users"].update_one(
+                {"user_id": user_id},
+                {"$push": {
+                    "receipts": {
+                        "order_id": order_id,
                         "payment_id": payment_id,
-                        "payment_method": method
-                    }}
-                )
-                if order.get("user_id"):
-                    user_summary = {
-                        "order_id": order.get("order_id"),
-                        "amount": order.get("total_price", amount),
-                        "payment_method": method,
-                        "payment_id": payment_id,
-                        "checkout_time": completed_at,
-                        "store_id": order.get("store_id"),
-                        "status": "paid" if new_status == "paid" else "failed"
+                        "amount": order_doc.get("total_price", 0),
+                        "method": method,
+                        "status": "paid",
+                        "timestamp": datetime.utcnow().isoformat()
                     }
-                    db["users"].update_one(
-                        {"user_id": order.get("user_id")},
-                        {"$push": {"receipts": user_summary}}
-                    )
+                }}
+            )
 
-    # Optionally: call return_url by storing it and allowing frontend to poll /status
-    # We won't perform external HTTP callback here — the frontend can poll /status or the order endpoint.
+        return {
+            "message": "Payment successful",
+            "order_id": order_id,
+            "cart_id": cart_id,
+            "payment_id": payment_id,
+            "status": "paid",
+            "stock_update": stock_result
+        }
 
-    return {
-        "message": "payment processed (mock)",
-        "payment_id": payment_id,
-        "status": new_status,
-        "method": method,
-        "payer_ref": payer_ref
-    }
+    else:
+        # Payment failed path
+        db["orders"].update_one(
+            {"order_id": order_id},
+            {"$set": {"status": "payment_failed", "payment_status": "failed"}}
+        )
+        return {"message": "Payment failed", "order_id": order_id, "status": "failed"}

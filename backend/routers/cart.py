@@ -8,6 +8,8 @@ from services.matcher import match_items
 from services.verifier import decide_match, decide_removal
 import pdfkit
 from bson import ObjectId
+from utils.cart_utils import is_cart_locked,lock_cart
+
 
 def convert_objectid(obj):
     """Recursively convert ObjectId and nested values to strings for JSON-safe responses."""
@@ -24,12 +26,64 @@ def convert_objectid(obj):
 router = APIRouter(prefix="/cart", tags=["Cart"])
 
 @router.post("/login")
-def cart_login(data: dict):
+def cart_login(payload: dict):
+    """
+    Assign an available cart to a user for this shopping session.
+    Expected payload:
+    {
+        "user_id": "USR123",
+        "store_id": "STORE001"
+    }
+    """
     db = get_db()
-    data["linked"] = True
-    data["login_time"] = datetime.utcnow().isoformat()
-    db["carts"].update_one({"cart_id": data["cart_id"]}, {"$set": data}, upsert=True)
-    return {"cart_id": data["cart_id"], "user_id": data.get("user_id"), "linked": True, "login_time": data["login_time"]}
+    user_id = payload.get("user_id")
+    store_id = payload.get("store_id")
+
+    if not user_id or not store_id:
+        return {"error": "Missing user_id or store_id"}
+
+    # Step 1: Find an available cart
+    available_cart = db["carts"].find_one_and_update(
+        {"store_id": store_id, "status": "available", "locked": False},
+        {"$set": {"status": "in_use", "locked": False, "last_used": datetime.utcnow().isoformat()}},
+    )
+
+    if not available_cart:
+        return {"error": "No available carts right now. Please wait."}
+
+    cart_id = available_cart["cart_id"]
+    session_id = f"{cart_id}_SESS_{uuid.uuid4().hex[:6].upper()}"
+
+    # Step 2: Create the session info
+    session_doc = {
+        "session_id": session_id,
+        "user_id": user_id,
+        "login_time": datetime.utcnow().isoformat(),
+        "checkout_time": None,
+        "items": [],
+        "total_items": 0,
+        "total_price": 0,
+        "total_weight": 0,
+        "shopping_list_id": None
+    }
+
+    # Step 3: Update cart with current session
+    db["carts"].update_one(
+        {"cart_id": cart_id},
+        {"$set": {"current_session": session_doc}}
+    )
+
+    # Step 4: Return assigned cart
+    return {
+        "message": "Cart assigned successfully",
+        "cart_id": cart_id,
+        "session_id": session_id,
+        "store_id": store_id,
+        "user_id": user_id,
+        "status": "in_use",
+        "locked": False
+    }
+
 
 @router.post("/detect")
 def cart_detect(payload: dict):
@@ -38,6 +92,8 @@ def cart_detect(payload: dict):
     """
     db = get_db()
     cart_id = payload.get("cart_id")
+    if is_cart_locked(cart_id):
+        return {"error": "Cart is locked. Checkout in progress or completed."}
     label = payload.get("detected_label")
     conf = payload.get("camera_confidence", 0.0)
     candidates_res = match_items([{"name": label}])
@@ -57,13 +113,14 @@ def cart_detect(payload: dict):
     return {"detection_id": detection_id, "candidate_items": candidates, "status":"awaiting_weight", "timeout_ms": 7000}
 
 @router.post("/weight")
-@router.post("/weight")
 def update_cart_weight(payload: dict):
     from services.verifier import decide_match
     from utils.db import get_db
 
     db = get_db()
     cart_id = payload.get("cart_id")
+    if is_cart_locked(cart_id):
+        return {"error": "Cart is locked. Checkout in progress or completed."}
     detection_id = payload.get("detection_id")
     reading = payload.get("weight_g")
 
@@ -200,6 +257,8 @@ def cart_detect_remove(payload: dict):
     """
     db = get_db()
     cart_id = payload.get("cart_id")
+    if is_cart_locked(cart_id):
+        return {"error": "Cart is locked. Checkout in progress or completed."}
     label = payload.get("detected_label")
     conf = payload.get("camera_confidence", 0.0)
 
@@ -233,6 +292,8 @@ def cart_weight_remove(payload: dict):
     db = get_db()
     detection_id = payload.get("detection_id")
     cart_id = payload.get("cart_id")
+    if is_cart_locked(cart_id):
+        return {"error": "Cart is locked. Checkout in progress or completed."}
     new_total = payload.get("cart_total_weight")
 
     if new_total is None:
@@ -301,12 +362,16 @@ def cart_weight_remove(payload: dict):
 @router.post("/checkout")
 def checkout_cart(payload: dict):
     """
-    Finalize the cart, create order record, initiate mock payment,
-    and return QR info for payment.
+    Finalize the cart:
+    - Lock it
+    - Create order
+    - Initiate mock payment
+    - Cleanup shopping list (forward unbought items)
     """
     from utils.db import get_db
+    from utils.cart_utils import lock_cart
     from datetime import datetime
-    import requests  # to call our mock payment endpoint locally
+    import requests
     from bson import ObjectId
 
     db = get_db()
@@ -320,8 +385,10 @@ def checkout_cart(payload: dict):
     if not cart:
         return {"error": "Cart not found"}
 
-    checkout_time = datetime.utcnow().isoformat()
+    # ✅ Lock the cart
+    lock_cart(cart_id)
 
+    checkout_time = datetime.utcnow().isoformat()
     db["carts"].update_one(
         {"cart_id": cart_id},
         {"$set": {"checked_out": True, "checkout_time": checkout_time, "linked": False}}
@@ -331,7 +398,7 @@ def checkout_cart(payload: dict):
     store_id = cart.get("store_id")
     total_price = cart.get("total_price", 0)
 
-    # 🧾 Create a pending order
+    # ✅ Create pending order
     order_id = f"ORD{int(datetime.utcnow().timestamp())}"
     order_doc = {
         "order_id": order_id,
@@ -349,22 +416,63 @@ def checkout_cart(payload: dict):
     }
     db["orders"].insert_one(order_doc)
 
-    # 🧩 Auto-initiate mock payment session (internal API call)
+    # ✅ Payment initiation
     try:
         payment_resp = requests.post(
             "http://127.0.0.1:8000/mock-payment/create",
-            json={
-                "order_id": order_id,
-                "amount": total_price,
-                "currency": "INR"
-            },
+            json={"order_id": order_id, "amount": total_price, "currency": "INR"},
             timeout=5
         )
         payment_data = payment_resp.json()
     except Exception as e:
         payment_data = {"error": f"Payment initiation failed: {str(e)}"}
 
-    # Return both order & payment info to frontend
+    # ✅ Handle shopping list forwarder
+    linked_user_id = cart.get("linked_user_id")
+    linked_list_id = cart.get("linked_list_id")
+    next_list_id = None
+    remaining_items = 0
+    if linked_user_id and linked_list_id:
+        old_list = db["shopping_lists"].find_one({"user_id": linked_user_id, "list_id": linked_list_id})
+        if old_list:
+            not_bought = [i for i in old_list.get("items", []) if not i.get("bought")]
+            not_found = old_list.get("not_found", [])
+            new_items = not_bought + not_found
+
+            timestamp = int(datetime.utcnow().timestamp())
+            next_list_id = f"{linked_user_id}_L{timestamp}"
+            new_list = {
+                "user_id": linked_user_id,
+                "list_id": next_list_id,
+                "items": new_items,
+                "created_at": datetime.utcnow().isoformat(),
+                "status": "pending",
+                "list_name": f"{old_list.get('list_name', 'My List')} (Next)"
+            }
+            db["shopping_lists"].insert_one(new_list)
+            remaining_items = len(new_items)
+
+            db["shopping_lists"].update_one(
+                {"user_id": linked_user_id, "list_id": linked_list_id},
+                {"$set": {"status": "completed", "archived_at": datetime.utcnow().isoformat()}}
+            )
+
+    # ✅ Save receipt for reference
+    receipt = {
+        "cart_id": cart_id,
+        "checkout_time": checkout_time,
+        "order_id": order_id,
+        "total_items": cart.get("total_items", 0),
+        "total_weight_g": cart.get("total_weight", 0),
+        "total_price": total_price,
+        "linked_user_id": linked_user_id,
+        "old_list_id": linked_list_id,
+        "new_list_id": next_list_id,
+        "remaining_items_next_list": remaining_items
+    }
+    db["receipts"].insert_one(receipt)
+
+    # ✅ Return unified result
     def clean(obj):
         if isinstance(obj, ObjectId):
             return str(obj)
@@ -383,8 +491,14 @@ def checkout_cart(payload: dict):
             "total_items": cart.get("total_items", 0),
             "total_price": total_price,
             "store_id": store_id
-        }
+        },
+        "shopping_list_update": {
+            "new_list_id": next_list_id,
+            "remaining_items": remaining_items
+        },
+        "receipt": clean(receipt)
     }
+
 
 @router.get("/receipt/{order_id}")
 def get_receipt(order_id: str):
@@ -409,15 +523,49 @@ def get_receipt(order_id: str):
 def cart_logout(payload: dict):
     """
     Called after receipt printed / session timeout.
-    Deletes temp cart & detections for that cart_id.
+    Cleans cart and removes session data completely.
     Payload: { "cart_id": "CART102" }
     """
     db = get_db()
     cart_id = payload.get("cart_id")
 
-    db["carts"].delete_one({"cart_id": cart_id})
+    if not cart_id:
+        return {"error": "cart_id required"}
+
+    # 🧹 Fields to remove completely
+    fields_to_unset = {
+        "items": "",
+        "total_items": "",
+        "total_weight": "",
+        "total_price": "",
+        "user_list_items": "",
+        "checked_out": "",
+        "checkout_time": "",
+        "linked": "",
+        "linked_list_id": "",
+        "linked_user_id": "",
+        "backend_matches": "",
+        "linked_at": "",
+        "list_name": "",
+        "optimized_path": ""
+    }
+
+    # 🧩 Reset cart to available & unlocked, then unset old session data
+    db["carts"].update_one(
+        {"cart_id": cart_id},
+        {
+            "$set": {
+                "status": "available",
+                "locked": False
+            },
+            "$unset": fields_to_unset
+        }
+    )
+
+    # 🗑️ Clean related detections
     db["detections"].delete_many({"cart_id": cart_id})
-    return {"message": f"Cart {cart_id} session cleared successfully."}
+
+    return {"message": f"Cart {cart_id} session cleared and unlocked successfully."}
 
 from services.weight_monitor import process_weight_event
 from utils.db import get_db
