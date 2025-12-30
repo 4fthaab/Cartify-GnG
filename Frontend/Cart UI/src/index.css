@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Smart Cart Retail Theme - Modern & Fresh */
+    --background: 220 25% 97%;
+    --foreground: 220 15% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 15% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 15% 15%;
+
+    /* Primary: Modern Teal/Cyan (Tech-forward) */
+    --primary: 188 94% 45%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 188 94% 65%;
+
+    /* Secondary: Retail Orange (Warm, inviting) */
+    --secondary: 25 95% 53%;
+    --secondary-foreground: 0 0% 100%;
+
+    /* Accent: Premium Purple */
+    --accent: 262 83% 58%;
+    --accent-foreground: 0 0% 100%;
+
+    --muted: 220 15% 92%;
+    --muted-foreground: 220 10% 45%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 220 13% 88%;
+    --input: 220 13% 88%;
+    --ring: 188 94% 45%;
+
+    --radius: 0.75rem;
+
+    /* Custom gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(188 94% 45%) 0%, hsl(188 94% 65%) 100%);
+    --gradient-secondary: linear-gradient(135deg, hsl(25 95% 53%) 0%, hsl(25 95% 63%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(262 83% 58%) 0%, hsl(262 83% 68%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(188 94% 45%) 0%, hsl(262 83% 58%) 100%);
+    
+    /* Glass effect */
+    --glass-bg: hsla(0, 0%, 100%, 0.7);
+    --glass-border: hsla(0, 0%, 100%, 0.3);
+
+    /* Shadows */
+    --shadow-sm: 0 2px 8px hsla(220, 15%, 15%, 0.08);
+    --shadow-md: 0 4px 16px hsla(220, 15%, 15%, 0.12);
+    --shadow-lg: 0 8px 32px hsla(220, 15%, 15%, 0.16);
+    --shadow-glow: 0 0 24px hsla(188, 94%, 45%, 0.3);
+  }
+
+  .dark {
+    --background: 220 20% 8%;
+    --foreground: 220 15% 92%;
+
+    --card: 220 20% 12%;
+    --card-foreground: 220 15% 92%;
+
+    --popover: 220 20% 12%;
+    --popover-foreground: 220 15% 92%;
+
+    --primary: 188 94% 55%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 188 94% 75%;
+
+    --secondary: 25 95% 58%;
+    --secondary-foreground: 0 0% 100%;
+
+    --accent: 262 83% 65%;
+    --accent-foreground: 0 0% 100%;
+
+    --muted: 220 15% 18%;
+    --muted-foreground: 220 10% 60%;
+
+    --destructive: 0 84% 65%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 15% 22%;
+    --input: 220 15% 22%;
+    --ring: 188 94% 55%;
+
+    --glass-bg: hsla(220, 20%, 12%, 0.7);
+    --glass-border: hsla(220, 15%, 92%, 0.1);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
