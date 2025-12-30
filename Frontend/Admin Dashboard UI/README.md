@@ -1,11 +1,26 @@
+# 🛒 Cartify GnG – Admin Dashboard UI
 
-  # Advanced Admin Dashboard
+This folder contains the **Admin Dashboard User Interface** for **Cartify GnG : Smart Shopping Cart**.
 
-  This is a code bundle for Advanced Admin Dashboard. The original project is available at https://www.figma.com/design/AvR4qfmnWSeMtuEUVhPChx/Advanced-Admin-Dashboard.
+The Admin Dashboard is used by **store administrators** to manage items, layouts, inventory data, and to support backend features such as **shopping list matching**, **optimized path generation**, and **fraud prevention workflows**.
 
-  ## Running the code
+---
 
-  Run `npm i` to install the dependencies.
+## 📁 Folder Structure
 
-  Run `npm run dev` to start the development server.
-  
+```text
+Admin Dashboard UI/
+├── src/
+│   ├── components/      # Reusable UI components (forms, tables, cards)
+│   ├── guidelines/      # UI rules, constants, enums, helper logic
+│   ├── styles/          # Component-level and global styles
+│   ├── App.tsx          # Root React component
+│   ├── main.tsx         # Application entry point
+│   └── index.css        # Global CSS
+│
+├── index.html           # HTML entry (Vite)
+├── vite.config.ts       # Vite configuration
+├── package.json         # Project dependencies & scripts
+├── package-lock.json    # Locked dependency versions
+├── Attributions.md      # Third-party libraries & asset credits
+└── README.md            # Project documentation
