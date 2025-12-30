@@ -1,43 +1,79 @@
-# Welcome to Cartify GnG frontend
+# 🛒 Cartify GnG – Cart UI
 
-## Project info
+This folder contains the **Cart User Interface (Cart UI)** for **Cartify GnG : Smart Shopping Cart**.
 
-## How can I edit this code?
+The Cart UI runs on the **smart cart display** (or simulated web device) and provides real-time interaction for customers during shopping, including item tracking, optimized navigation, and fraud-prevention feedback.
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone https://github.com/4fthaab/cartfiy-frontend.git
+---
 
-# Step 2: Navigate to the project directory.
-cd cartify-frontend
+## 📁 Folder Structure
 
-# Step 3: Install the necessary dependencies.
-npm i
+```text
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+Cart UI/
 
-**Edit a file directly in GitHub**
+├── public/
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+│   ├── logo.png            # App logo
 
-**Use GitHub Codespaces**
+│   ├── placeholder.svg     # Placeholder assets
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+│   └── robots.txt
 
-## What technologies are used for this project?
+│
 
-This project is built with:
+├── src/
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+│   ├── components/         # UI components (cards, minimap, modals, alerts)
+
+│   ├── hooks/              # Custom React hooks (cart state, socket, sync)
+
+│   ├── lib/                # Utilities, API clients, helpers
+
+│   ├── pages/              # Screen-level pages (Home, Cart, Navigation)
+
+│   ├── App.tsx             # Root application component
+
+│   ├── App.css             # App-level styles
+
+│   ├── index.css           # Global styles
+
+│   └── main.tsx            # Application entry point
+
+│
+
+├── components.json         # UI component configuration
+
+├── vite-env.d.ts           # Vite environment typings
+
+├── index.html              # HTML entry (Vite)
+
+├── vite.config.ts          # Vite configuration
+
+│
+
+├── tailwind.config.ts      # Tailwind CSS configuration
+
+├── postcss.config.js       # PostCSS setup
+
+│
+
+├── eslint.config.js        # ESLint configuration
+
+├── tsconfig.json           # TypeScript base config
+
+├── tsconfig.app.json       # App-specific TS config
+
+├── tsconfig.node.json      # Node-specific TS config
+
+│
+
+├── package.json            # Project dependencies & scripts
+
+├── package-lock.json       # Dependency lock file
+
+├── bun.lockb               # Bun lock file (optional runtime)
+
+├── .gitignore
+
+└── README.md               # Project documentation
