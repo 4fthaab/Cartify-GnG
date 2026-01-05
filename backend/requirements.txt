@@ -4,3 +4,5 @@ pymongo
 pydantic
 pydantic-settings
 python-dotenv
+pdfkit
+certifi
