@@ -31,7 +31,7 @@ def cart_login(payload: dict):
     Assign an available cart to a user for this shopping session.
     Expected payload:
     {
-        "user_id": "USR123",
+        "user_id": "USR496713",
         "store_id": "STORE001"
     }
     """
@@ -89,6 +89,7 @@ def cart_login(payload: dict):
 def cart_detect(payload: dict):
     """
     Camera sends detected label. Backend finds candidates and creates detection doc.
+    { "cart_id":"CART102", "detected_label":"Brush", "camera_confidence":0.95 }
     """
     db = get_db()
     cart_id = payload.get("cart_id")
@@ -114,9 +115,11 @@ def cart_detect(payload: dict):
 
 @router.post("/weight")
 def update_cart_weight(payload: dict):
+    """
+    { "cart_id": "CART102", "detection_id": ".........", "weight_g": 30}
+    """
     from services.verifier import decide_match
     from utils.db import get_db
-
     db = get_db()
     cart_id = payload.get("cart_id")
     if is_cart_locked(cart_id):
