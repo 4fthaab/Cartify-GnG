@@ -62,10 +62,3 @@ layout = {
         }
     ]
 }
-
-items = [
-    {"item_id": "I1", "name": "Apple", "rack_id": "A2", "position_index": 5},
-    {"item_id": "I2", "name": "Banana", "rack_id": "A2", "position_index": 15}
-]
-
-print(optimize_path(items, layout))

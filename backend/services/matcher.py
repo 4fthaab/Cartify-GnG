@@ -1,43 +1,53 @@
 from utils.db import get_db
 from difflib import get_close_matches
 
-def match_items(user_items):
+def match_items(user_items, store_id):
     db = get_db()
-    store_items = list(db["items"].find({}, {"_id": 0}))
 
-    matched = []
+    products = db["itemdata"]
+    items = db["items"]
+
+    matched_items = []
     not_found = []
 
-    all_names = [item.get("name", "").lower() for item in store_items]
+    for u in user_items:
+        query = u["name"].lower().strip()
 
-    for u_item in user_items:
-        name = (u_item.get("name") or "").lower().strip()
-        if not name:
+        # 1️⃣ Find matching products
+        matched_products = products.find({
+            "label_variants": {
+                "$elemMatch": {
+                    "$regex": f"^{query}$",
+                    "$options": "i"
+                }
+            }
+        })
+
+        product_ids = [p["product_id"] for p in matched_products]
+
+        if not product_ids:
+            not_found.append({"name": u["name"]})
             continue
 
-        # try exact label_variant match first
-        candidate_group = [
-            it for it in store_items
-            if name in [v.lower() for v in it.get("label_variants", [])]
-        ]
+        # 2️⃣ Find store items
+        store_items = list(items.find({
+            "store_id": store_id,
+            "product_id": {"$in": product_ids},
+            "is_active": True
+        }, {"_id": 0}))
 
-        if not candidate_group:
-            # try approximate name match
-            match = get_close_matches(name, all_names, n=1, cutoff=0.6)
-            if match:
-                base_name = match[0].split("(")[0].strip()
-                # find all items starting with the same base name (Good Day Biscuit)
-                candidate_group = [
-                    it for it in store_items
-                    if it.get("name", "").lower().startswith(base_name)
-                ]
-
-        if candidate_group:
-            matched.extend(candidate_group)
+        if store_items:
+            matched_items.extend(store_items)
         else:
-            not_found.append({"name": u_item.get("name"), "not_found": True})
+            not_found.append({"name": u["name"]})
+    
+    print("User input:", u)
+    print("Matched product_ids:", product_ids)
+    print("Store items found:", store_items)
 
-    return {"matched_items": matched, "not_found": not_found}
-
+    return {
+        "matched_items": matched_items,
+        "not_found": not_found
+    }
 
 

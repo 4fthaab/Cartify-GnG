@@ -12,9 +12,9 @@ def generate_path(payload: dict):
     Generate optimized shopping path for a user's list.
     Input example:
     {
-        "user_id": "U123",
+        "user_id": "USR496713",
         "store_id": "STORE001",
-        "list_id": "U123L1"
+        "list_id": "USR496713_L1762692068"
     }
     """
     user_id = payload.get("user_id")
@@ -41,7 +41,7 @@ def generate_path(payload: dict):
     if not layout:
         raise HTTPException(status_code=404, detail="Store layout not found")
 
-    matched = match_items(user_items)
+    matched = match_items(user_items, store_id)
 
     # 🔧 TEMP ADAPTER (THIS IS THE KEY PART)
     normalized_items = []
@@ -51,7 +51,6 @@ def generate_path(payload: dict):
         if "rack_id" in it and "position_index" in it:
             normalized_items.append({
                 "item_id": it["item_id"],
-                "name": it["name"],
                 "rack_id": it["rack_id"],
                 "position_index": it["position_index"],
             })
@@ -60,7 +59,6 @@ def generate_path(payload: dict):
         elif "rack" in it and "col" in it:
             normalized_items.append({
                 "item_id": it["item_id"],
-                "name": it["name"],
                 "rack_id": it["rack"],        # TEMP mapping
                 "position_index": it["col"],  # TEMP mapping
             })

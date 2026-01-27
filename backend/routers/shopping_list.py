@@ -59,9 +59,6 @@ def create_shopping_list(payload: dict):
         "item_count": len(items)
     }
 
-
-# ✅ UPDATE LIST
-@router.post("/update")
 @router.post("/update")
 def update_shopping_list(payload: dict = Body(...)):
     """
@@ -136,7 +133,7 @@ def select_shopping_list(payload: dict):
     Keeps only user’s list item names for cart display (avoids duplicates).
     """
     from services.matcher import match_items
-    from services.optimizer import optimize_path
+    from services.optimizer_v1 import optimize_path
 
     db = get_db()
     user_id = payload.get("user_id")
