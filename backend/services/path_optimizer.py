@@ -1,3 +1,5 @@
+print("NEW OPTIMIZER CALLED")
+
 def build_grid(layout: dict):
 
     # 1️⃣ Get grid size
@@ -29,7 +31,7 @@ def build_grid(layout: dict):
                     grid[y + dy][x + dx] = 0
 
         # Walls are blocked
-        if element["type"] == "blocked" and element.get("zoneType") == "wall":
+        if element["type"] == "blocked" and (element.get("zoneType") == "wall" or element.get("zoneType") == "restricted"):
             for dx in range(w):
                 for dy in range(h):
                     grid[y + dy][x + dx] = 0
@@ -227,5 +229,10 @@ def optimize_path(matched_items, layout):
                     "y": node[1]
                 }
             })
+    
+    print("Optimized order:")
+    for item in optimized_path:
+        print(item["rack_id"], item["pickup_point"])
+
 
     return optimized_path
