@@ -9,12 +9,25 @@ router = APIRouter(prefix="/shopping-list", tags=["Shopping List"])
 # ✅ CREATE LIST
 @router.post("/create")
 def create_shopping_list(payload: dict):
+    """
+    {"user_id": "USR496713", "items": ["apple","lays","good day","orange","paal","cover","ice cream"]}
+    """
     db = get_db()
     user_id = payload.get("user_id")
     items = payload.get("items")
 
     if not user_id or not items:
         return {"error": "Missing required fields (user_id or items)"}
+
+    # 🔥 Normalize items to dict format
+    normalized_items = []
+    for item in items:
+        if isinstance(item, str):
+            normalized_items.append({"name": item})
+        elif isinstance(item, dict) and "name" in item:
+            normalized_items.append({"name": item["name"]})
+        else:
+            return {"error": "Invalid item format. Each item must be string or {'name': ...}"}
 
     # Validate user exists
     user = db["users"].find_one({"user_id": user_id})
@@ -38,14 +51,13 @@ def create_shopping_list(payload: dict):
         "user_id": user_id,
         "list_id": list_id,
         "list_name": list_name,
-        "items": items,
+        "items": normalized_items,   # 🔥 store normalized
         "created_at": datetime.utcnow().isoformat(),
         "status": "pending"
     }
 
     db["shopping_lists"].insert_one(doc)
 
-    # 🔗 Update user's shopping_lists array
     db["users"].update_one(
         {"user_id": user_id},
         {"$addToSet": {"shopping_lists": {"list_id": list_id, "list_name": list_name}}},
@@ -56,7 +68,7 @@ def create_shopping_list(payload: dict):
         "user_id": user_id,
         "list_id": list_id,
         "list_name": list_name,
-        "item_count": len(items)
+        "item_count": len(normalized_items)
     }
 
 @router.post("/update")
@@ -129,11 +141,10 @@ def update_shopping_list(payload: dict = Body(...)):
 @router.post("/select")
 def select_shopping_list(payload: dict):
     """
-    Links a shopping list to a cart and prepares optimized path.
-    Keeps only user’s list item names for cart display (avoids duplicates).
+   { "user_id":"USR496713", "list_id":"USR496713_L1771856583", "cart_id":"CART102" }
     """
     from services.matcher import match_items
-    from services.optimizer_v1 import optimize_path
+    from services.path_optimizer import optimize_path
 
     db = get_db()
     user_id = payload.get("user_id")
@@ -148,20 +159,50 @@ def select_shopping_list(payload: dict):
         return {"error": "Shopping list not found"}
 
     # Run matching (for backend logic)
-    matched_data = match_items(selected_list["items"])
+    # 1️⃣ Get cart to fetch store_id
+    cart = db["carts"].find_one({"cart_id": cart_id})
+    if not cart:
+        return {"error": "Cart not found"}
+
+    store_id = cart.get("store_id")
+    if not store_id:
+        return {"error": "Cart does not have store_id"}
+
+    # Normalize items into {"name": "..."} format
+    normalized_items = []
+
+    for item in selected_list["items"]:
+        if isinstance(item, str):
+            normalized_items.append({"name": item})
+        else:
+            normalized_items.append(item)
+
+    matched_data = match_items(normalized_items, store_id)
     matched_items = matched_data["matched_items"]
     not_found = matched_data["not_found"]
 
-    # Optimize backend path (internal use)
-    optimized_path = optimize_path(matched_items)
+    # 3️⃣ Fetch layout
+    layout_doc = db["store_layouts"].find_one({"store_id": store_id})
+    if not layout_doc:
+        return {"error": "Store layout not found"}
+
+    layout = layout_doc  # direct use
+
+    # 4️⃣ Optimize path
+    optimized_path = optimize_path(matched_items, layout)
 
     # ✅ Store only user list names for cart display
-    user_display_items = [{"name": item["name"], "bought": False} for item in selected_list["items"]]
+    user_display_items = []
+    for item in selected_list["items"]:
+        if isinstance(item, str):
+            user_display_items.append({"name": item, "bought": False})
+        else:
+            user_display_items.append({"name": item["name"], "bought": False})
 
     db["carts"].update_one(
         {"cart_id": cart_id},
         {"$set": {
-            "linked_user_id": user_id,
+            "linked_user_id": user_id,  
             "linked_list_id": list_id,
             "linked_at": datetime.utcnow().isoformat(),
             "list_name": selected_list.get("list_name"),
@@ -276,7 +317,7 @@ def delete_shopping_list(payload: dict):
     {
         "user_id": "USR123",
         "list_id": "USR123_L1730933212",
-        "items": ["Brush", "Onion"]   # optional
+        "items": ["Brush", "Onion"]   # optional to remove the entire list dont pass the items
     }
     """
     db = get_db()

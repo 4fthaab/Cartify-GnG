@@ -10,6 +10,9 @@ def hash_password(pw: str) -> str:
 
 @router.post("/signup")
 def signup_user(data: dict):
+    """
+    { "name":"USER123", "email":"user1@test.com", "phone":"9999999999", "password":"123456" }
+    """
     db = get_db()
     email = data.get("email")
     phone = data.get("phone")
@@ -19,7 +22,15 @@ def signup_user(data: dict):
     if not (email or phone):
         return {"status": "error", "message": "Email or phone required"}
 
-    if db["users"].find_one({"$or": [{"email": email}, {"phone": phone}]}):
+    query = []
+
+    if email:
+        query.append({"email": email})
+
+    if phone:
+        query.append({"phone": phone})
+
+    if query and db["users"].find_one({"$or": query}):
         return {"status": "error", "message": "User already exists"}
 
     user_id = f"USR{str(datetime.utcnow().timestamp()).replace('.', '')[-6:]}"
@@ -38,6 +49,9 @@ def signup_user(data: dict):
 
 @router.post("/login")
 def login_user(data: dict):
+    """
+    { "email":"user1@test.com", "password":"123456" }
+    """
     db = get_db()
     email = data.get("email")
     phone = data.get("phone")

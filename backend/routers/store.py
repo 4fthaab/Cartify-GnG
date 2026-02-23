@@ -5,6 +5,9 @@ router = APIRouter(prefix="/store", tags=["Store"])
 
 @router.post("/create")
 def create_store(store: dict):
+    """
+    { "store_id":"STR001", "name":"Cartify SuperMart", "location":"Calicut" }
+    """
     db = get_db()
     result = db["stores"].insert_one(store)
     return {"message": "Store created", "store_id": str(result.inserted_id)}

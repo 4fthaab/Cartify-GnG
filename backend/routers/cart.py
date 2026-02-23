@@ -97,7 +97,13 @@ def cart_detect(payload: dict):
         return {"error": "Cart is locked. Checkout in progress or completed."}
     label = payload.get("detected_label")
     conf = payload.get("camera_confidence", 0.0)
-    candidates_res = match_items([{"name": label}])
+    cart = db["carts"].find_one({"cart_id": cart_id})
+    if not cart:
+        return {"error": "Cart not found"}
+    store_id = cart.get("store_id")
+    if not store_id:
+        return {"error": "Cart missing store_id"}
+    candidates_res = match_items([{"name": label}], store_id)
     candidates = candidates_res.get("matched_items", [])
     detection_id = str(uuid.uuid4())
     det_doc = {
@@ -132,9 +138,11 @@ def update_cart_weight(payload: dict):
     if not det_doc:
         return {"status": "error", "message": "Detection not found"}
 
-    # 2️⃣ Append new weight reading
-    db["detections"].update_one({"detection_id": detection_id}, {"$push": {"weight_readings": reading}})
-    det_doc["weight_readings"] = det_doc.get("weight_readings", []) + [reading]
+    db["detections"].update_one(
+        {"detection_id": detection_id},
+        {"$set": {"weight_readings": [reading]}}
+    )
+    det_doc["weight_readings"] = [reading]
 
     # 3️⃣ Decide which item matched
     result = decide_match(det_doc)
@@ -266,7 +274,15 @@ def cart_detect_remove(payload: dict):
     conf = payload.get("camera_confidence", 0.0)
 
     # Find candidate items (same matcher used for add)
-    candidates_res = match_items([{"name": label}])
+    cart = db["carts"].find_one({"cart_id": cart_id})
+    if not cart:
+        return {"error": "Cart not found"}
+
+    store_id = cart.get("store_id")
+    if not store_id:
+        return {"error": "Cart missing store_id"}
+
+    candidates_res = match_items([{"name": label}], store_id)
     candidates = candidates_res.get("matched_items", [])
 
     detection_id = str(uuid.uuid4())
@@ -370,6 +386,8 @@ def checkout_cart(payload: dict):
     - Create order
     - Initiate mock payment
     - Cleanup shopping list (forward unbought items)
+    
+    { "cart_id":"CART102", "payment_method":"upi" }
     """
     from utils.db import get_db
     from utils.cart_utils import lock_cart

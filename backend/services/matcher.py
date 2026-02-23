@@ -35,6 +35,14 @@ def match_items(user_items, store_id):
             "product_id": {"$in": product_ids},
             "is_active": True
         }, {"_id": 0}))
+        for si in store_items:
+            product = products.find_one({"product_id": si["product_id"]})
+            if product:
+                si["weight_g"] = product.get("weight_g")
+                si["weight_type"] = product.get("weight_type", "fixed")
+                si["unit_price_per_kg"] = product.get("unit_price_per_kg")
+                si["label_variants"] = product.get("label_variants", [])
+                si["name"] = product.get("name")
 
         if store_items:
             matched_items.extend(store_items)
