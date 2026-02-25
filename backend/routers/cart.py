@@ -9,7 +9,7 @@ from services.verifier import decide_match, decide_removal
 import pdfkit
 from bson import ObjectId
 from utils.cart_utils import is_cart_locked,lock_cart
-
+from services.location_service import update_location_from_marker
 
 def convert_objectid(obj):
     """Recursively convert ObjectId and nested values to strings for JSON-safe responses."""
@@ -21,7 +21,6 @@ def convert_objectid(obj):
         return str(obj)
     else:
         return obj
-
 
 router = APIRouter(prefix="/cart", tags=["Cart"])
 
@@ -188,6 +187,15 @@ def update_cart_weight(payload: dict):
         }},
         upsert=True
     )
+    
+    from services.location_service import update_location_from_item
+    
+    store_id = cart.get("store_id")
+    update_location_from_item(
+        cart_id=cart_id,
+        item=item,
+        store_id=store_id
+    )
 
     # 6️⃣ Update stock
     db["items"].update_one(
@@ -259,6 +267,20 @@ def view_cart(cart_id: str):
         "total_items": len(cart.get("items", [])),
         "total_price": total_price
     }
+    
+@router.post("/cart/marker-update")
+async def marker_update(payload: dict):
+
+    cart_id = payload["cart_id"]
+    marker_id = payload["marker_id"]
+    confidence = payload.get("confidence", 1.0)
+
+    success = update_location_from_marker(cart_id, marker_id, confidence)
+
+    if not success:
+        return {"error": "Marker not found"}
+
+    return {"message": "Location updated from marker"}
 
 @router.post("/detect_remove")
 def cart_detect_remove(payload: dict):
@@ -626,4 +648,124 @@ def simulate_weight_event(payload: dict):
         "new_weight": new_weight,
         "alert_state": result["alert"],
         "delta_g": result["delta_g"]
+    }
+
+@router.get("/sync/{cart_id}")
+def sync_cart(cart_id: str):
+
+    db = get_db()
+
+    cart = db["carts"].find_one({"cart_id": cart_id})
+
+    if not cart:
+        raise HTTPException(status_code=404, detail="Cart not found")
+
+    # Optional: auto-detect offline if no heartbeat
+    last_seen = cart.get("last_seen")
+    if last_seen:
+        try:
+            last_seen_dt = datetime.fromisoformat(last_seen)
+            if (datetime.utcnow() - last_seen_dt).seconds > 60:
+                db["carts"].update_one(
+                    {"cart_id": cart_id},
+                    {"$set": {"network_status": "offline"}}
+                )
+                cart["network_status"] = "offline"
+        except:
+            pass
+
+    return {
+        "cart_id": cart["cart_id"],
+        "store_id": cart["store_id"],
+        "status": cart.get("status"),
+        "locked": cart.get("locked"),
+        "battery_level": cart.get("battery_level"),
+        "network_status": cart.get("network_status"),
+        "current_location": cart.get("current_location"),
+        "current_session": cart.get("current_session")
+    }
+    
+@router.post("/configure")
+def configure_cart(payload: dict):
+
+    cart_id = payload.get("cart_id")
+    device_serial = payload.get("device_serial")
+
+    if not cart_id or not device_serial:
+        raise HTTPException(status_code=400, detail="cart_id and device_serial required")
+
+    db = get_db()
+
+    # 1️⃣ Check cart exists
+    cart = db["carts"].find_one({"cart_id": cart_id})
+    if not cart:
+        raise HTTPException(status_code=404, detail="Cart not found")
+
+    # 2️⃣ Check if device_serial is already assigned to another cart
+    existing_device = db["carts"].find_one({
+        "device_serial": device_serial,
+        "cart_id": {"$ne": cart_id}
+    })
+
+    if existing_device:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Device already assigned to cart {existing_device['cart_id']}"
+        )
+
+    # 3️⃣ If this cart already has another serial assigned → block
+    if cart.get("device_serial") and cart["device_serial"] != device_serial:
+        raise HTTPException(
+            status_code=400,
+            detail="Cart already configured with another device"
+        )
+
+    # 4️⃣ Update cart
+    db["carts"].update_one(
+        {"cart_id": cart_id},
+        {
+            "$set": {
+                "device_serial": device_serial,
+                "network_status": "online",
+                "last_seen": datetime.utcnow().isoformat()
+            }
+        }
+    )
+
+    return {
+        "message": "Cart configured successfully",
+        "cart_id": cart_id
+    }
+    
+@router.post("/heartbeat")
+def cart_heartbeat(payload: dict):
+
+    cart_id = payload.get("cart_id")
+    battery_level = payload.get("battery_level")
+
+    if not cart_id:
+        raise HTTPException(status_code=400, detail="cart_id required")
+
+    db = get_db()
+
+    cart = db["carts"].find_one({"cart_id": cart_id})
+    if not cart:
+        raise HTTPException(status_code=404, detail="Cart not found")
+
+    update_data = {
+        "network_status": "online",
+        "last_seen": datetime.utcnow().isoformat()
+    }
+
+    if battery_level is not None:
+        update_data["battery_level"] = battery_level
+
+    db["carts"].update_one(
+        {"cart_id": cart_id},
+        {"$set": update_data}
+    )
+
+    return {
+        "message": "Heartbeat received",
+        "cart_id": cart_id
     }
