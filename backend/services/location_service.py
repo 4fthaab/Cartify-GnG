@@ -5,17 +5,34 @@ def update_location_from_marker(cart_id, marker_id, confidence=1.0):
 
     db = get_db()
 
-    marker = db["aisle_markers"].find_one({
-        "marker_id": marker_id,
-        "is_active": True
-    })
+    # 1️⃣ Get cart to know store_id
+    cart = db["carts"].find_one({"cart_id": cart_id})
+    if not cart:
+        return False
+
+    store_id = cart.get("store_id")
+    if not store_id:
+        return False
+
+    # 2️⃣ Fetch layout from store_layouts
+    layout = db["store_layouts"].find_one({"store_id": store_id})
+    if not layout:
+        return False
+
+    # 3️⃣ Search marker inside layout["elements"]
+    marker = next(
+        (e for e in layout.get("elements", [])
+         if e.get("type") == "aisle_marker" and e.get("id") == marker_id),
+        None
+    )
 
     if not marker:
         return False
 
+    # 4️⃣ Build location object from layout marker
     location_data = {
-        "x": marker["position"]["x"],
-        "y": marker["position"]["y"],
+        "x": marker["x"],
+        "y": marker["y"],
         "marker_id": marker_id,
         "nearby_racks": [
             marker.get("left_rack_id"),
@@ -26,6 +43,7 @@ def update_location_from_marker(cart_id, marker_id, confidence=1.0):
         "updated_at": datetime.utcnow().isoformat()
     }
 
+    # 5️⃣ Update cart
     db["carts"].update_one(
         {"cart_id": cart_id},
         {"$set": {"current_location": location_data}}
