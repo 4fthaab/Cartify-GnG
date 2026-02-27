@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from './components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select';
 import { Textarea } from './components/ui/textarea';
+import MapEditorPage from './pages/MapEditorPage.jsx';  // .jsx import works fine in .tsx
+import { Map as MapIcon } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -151,6 +153,14 @@ export default function App() {
               >
                 <MessageSquare className="w-4 h-4 mr-2" />
                 Reviews
+              </Button>
+              <Button
+                variant={activeTab === 'mapeditor' ? 'default' : 'ghost'}
+                onClick={() => setActiveTab('mapeditor')}
+                className="text-white"
+              >
+                <MapIcon className="w-4 h-4 mr-2" />
+                Map Editor
               </Button>
               <Button variant="ghost" className="text-white">
                 <LogOut className="w-4 h-4 mr-2" />
@@ -382,8 +392,8 @@ export default function App() {
                               product.status === 'In Stock'
                                 ? 'default'
                                 : product.status === 'Low Stock'
-                                ? 'secondary'
-                                : 'destructive'
+                                  ? 'secondary'
+                                  : 'destructive'
                             }
                           >
                             {product.status}
@@ -548,6 +558,18 @@ export default function App() {
                   </CardContent>
                 </Card>
               ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'mapeditor' && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-white text-3xl mb-2">Store Map Editor</h2>
+              <p className="text-slate-400">Design and manage your store floor layout</p>
+            </div>
+            <div className="bg-white rounded-xl" style={{ position: 'relative' }}>
+              <MapEditorPage />
             </div>
           </div>
         )}

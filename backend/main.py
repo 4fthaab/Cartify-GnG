@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from routers import admin_auth, store,cart,path_optimizer,alerts,shopping_list,auth,mock_payment,admin_store
+from routers import store,cart,path_optimizer,alerts,shopping_list,auth,mock_payment,admin_store,admin_dashboard,admin_auth,admin_items,admin_inventory
 from utils.db import connect_to_mongo
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
@@ -13,6 +13,9 @@ def startup_event():
 app.include_router(store.router)
 app.include_router(admin_auth.router)
 app.include_router(admin_store.router)
+app.include_router(admin_dashboard.router)
+app.include_router(admin_items.router)
+app.include_router(admin_items.router)
 app.include_router(auth.router)
 app.include_router(cart.router)
 app.include_router(shopping_list.router)

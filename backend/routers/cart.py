@@ -1,5 +1,5 @@
 # routers/cart.py
-from fastapi import APIRouter
+from fastapi import APIRouter,HTTPException
 from utils.db import get_db
 from datetime import datetime,timedelta
 import uuid
@@ -195,12 +195,6 @@ def update_cart_weight(payload: dict):
         cart_id=cart_id,
         item=item,
         store_id=store_id
-    )
-
-    # 6️⃣ Update stock
-    db["items"].update_one(
-        {"item_id": matched_item.get("item_id")},
-        {"$inc": {"stock_qty": -item_weight_g if weight_type == "variable" else -1}}
     )
 
     # 7️⃣ Auto mark in linked shopping list
