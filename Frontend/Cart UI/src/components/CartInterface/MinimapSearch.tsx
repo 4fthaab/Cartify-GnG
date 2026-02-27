@@ -159,29 +159,9 @@ export const MinimapSearch = ({ onNext, onLogout }: MinimapSearchProps) => {
           <div className="space-y-8">
             <br></br>
             {Array.from({ length: 4 }).map((_, rackIndex) => {
-              const compartments = generateCompartments(rackIndex + 1);
+              // const compartments = generateCompartments(rackIndex + 1);
               return (
                 <>
-                <div key={rackIndex} className="space-y-3">
-                  <div className="flex flex-wrap justify-center gap-1.5">
-                    {compartments.map((compartmentNumber) => {
-                      const id = `r${rackIndex + 1}c${compartmentNumber}`;
-                      const isHighlighted = highlighted === id;
-                      return (
-                        <div
-                          key={`${id}-${compartmentNumber}`}
-                          className={`w-11 h-11 rounded-lg border-2 flex items-center justify-center text-sm font-semibold transition-all duration-300 ${
-                            isHighlighted
-                              ? "bg-yellow-400 scale-110 border-yellow-600 shadow-lg text-slate-900"
-                              : "bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-600"
-                          }`}
-                        >
-                          {compartmentNumber}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
                 </>
               );
             })}

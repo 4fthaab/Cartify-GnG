@@ -17,7 +17,7 @@ export function HomeScreen({ onNavigate, cartItems, isDarkMode, onToggleTheme, i
   const quickActions = [
     { icon: ListChecks, label: 'Shopping List', screen: 'list' },
     { icon: ShoppingCart, label: 'My Cart', screen: 'cart', badge: cartItems },
-    { icon: Gift, label: 'Offers', screen: 'offers' },
+    { icon: Gift, label: 'Offers', screen: 'offers' }
   ];
 
   const offerBanners = [

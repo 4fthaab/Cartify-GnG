@@ -1,8 +1,8 @@
 from fastapi import FastAPI
-from routers import store,cart,path_optimizer,alerts,shopping_list,auth,mock_payment
+from routers import admin_auth, store,cart,path_optimizer,alerts,shopping_list,auth,mock_payment,admin_store
 from utils.db import connect_to_mongo
 from fastapi.middleware.cors import CORSMiddleware
-
+from fastapi.security import HTTPBearer
 
 app = FastAPI(title="Cartify GnG Backend", version="1.0.0")
 
@@ -11,6 +11,8 @@ def startup_event():
     connect_to_mongo()
 
 app.include_router(store.router)
+app.include_router(admin_auth.router)
+app.include_router(admin_store.router)
 app.include_router(auth.router)
 app.include_router(cart.router)
 app.include_router(shopping_list.router)
