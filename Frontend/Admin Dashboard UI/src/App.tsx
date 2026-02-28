@@ -16,11 +16,39 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from './components/ui/textarea';
 import MapEditorPage from './pages/MapEditorPage.jsx';  // .jsx import works fine in .tsx
 import { Map as MapIcon } from 'lucide-react';
+import AddProductModal from './components/database/AddProductModal';
 
 export default function App() {
   const { isAuthenticated, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showAddProduct, setShowAddProduct] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<any>(null);
+
+  // ── Real schema product data (mock, will come from DB) ──────────────────
+  const [productData, setProductData] = useState([
+    {
+      item_id: 'ITEM001', name: 'Potato', category_id: 'C2', category_name: 'Vegetables',
+      label_variants: ['potato', 'aloo', 'ഉരുളക്കിഴങ്ങ്'], weight_type: 'variable',
+      weight_g: null as number | null, unit_price_per_kg: 35 as number | null, price: null as number | null,
+      rack_id: 'str001r02', position_index: 1, is_active: true,
+    },
+    {
+      item_id: 'ITEM002', name: 'Coconut Oil 1L', category_id: 'C3', category_name: 'Cooking Essentials',
+      label_variants: ['coconut oil', 'velichenna', 'വെളിച്ചെണ്ണ'], weight_type: 'fixed',
+      weight_g: 920 as number | null, unit_price_per_kg: null as number | null, price: 420 as number | null,
+      rack_id: 'str001r03', position_index: 1, is_active: true,
+    },
+    {
+      item_id: 'ITEM003', name: 'Fresh Mango', category_id: 'C1', category_name: 'Fruits',
+      label_variants: ['mango', 'manga', 'മാങ്ങ'], weight_type: 'variable',
+      weight_g: null as number | null, unit_price_per_kg: 120 as number | null, price: null as number | null,
+      rack_id: 'str001r01', position_index: 3, is_active: true,
+    },
+  ]);
+
+  // Guard — must be AFTER all hooks
+  if (!isAuthenticated) return <LoginPage />;
 
   // Show login page if not authenticated
   if (!isAuthenticated) return <LoginPage />;
@@ -41,15 +69,6 @@ export default function App() {
     { name: 'Snacks', value: 20, color: '#f59e0b' },
     { name: 'Dairy', value: 15, color: '#ef4444' },
     { name: 'Others', value: 5, color: '#8b5cf6' },
-  ];
-
-  const productData = [
-    { id: 1, name: 'Fresh Milk', category: 'Dairy', price: 3.99, stock: 145, status: 'In Stock' },
-    { id: 2, name: 'Whole Wheat Bread', category: 'Groceries', price: 2.49, stock: 89, status: 'In Stock' },
-    { id: 3, name: 'Orange Juice', category: 'Beverages', price: 4.99, stock: 12, status: 'Low Stock' },
-    { id: 4, name: 'Potato Chips', category: 'Snacks', price: 3.49, stock: 0, status: 'Out of Stock' },
-    { id: 5, name: 'Greek Yogurt', category: 'Dairy', price: 5.99, stock: 67, status: 'In Stock' },
-    { id: 6, name: 'Coffee Beans', category: 'Groceries', price: 12.99, stock: 34, status: 'In Stock' },
   ];
 
   const offersData = [
@@ -273,20 +292,24 @@ export default function App() {
               <CardContent>
                 <div className="space-y-4">
                   {productData.slice(0, 3).map((product) => (
-                    <div key={product.id} className="flex items-center justify-between p-4 bg-slate-700/30 rounded-lg">
+                    <div key={product.item_id} className="flex items-center justify-between p-4 bg-slate-700/30 rounded-lg">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-lg flex items-center justify-center text-white text-xl">
                           🛍️
                         </div>
                         <div>
                           <p className="text-white font-medium">{product.name}</p>
-                          <p className="text-slate-400 text-sm">{product.category}</p>
+                          <p className="text-slate-400 text-sm">{product.category_name}</p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-white font-medium">${product.price}</p>
-                        <Badge variant={product.status === 'In Stock' ? 'default' : 'destructive'} className="text-xs">
-                          {product.status}
+                        <p className="text-white font-medium">
+                          {product.weight_type === 'fixed'
+                            ? `₹${product.price}`
+                            : `₹${product.unit_price_per_kg}/kg`}
+                        </p>
+                        <Badge variant={product.is_active ? 'default' : 'destructive'} className="text-xs">
+                          {product.is_active ? 'Active' : 'Inactive'}
                         </Badge>
                       </div>
                     </div>
@@ -300,70 +323,58 @@ export default function App() {
         {/* Database Management Tab */}
         {activeTab === 'database' && (
           <div className="space-y-6">
+            {/* Header */}
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-white text-3xl mb-2">Product Database</h2>
                 <p className="text-slate-400">Manage your supermarket inventory</p>
               </div>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button className="bg-cyan-500 hover:bg-cyan-600">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Product
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="bg-slate-800 border-slate-700 text-white">
-                  <DialogHeader>
-                    <DialogTitle>Add New Product</DialogTitle>
-                    <DialogDescription className="text-slate-400">
-                      Enter the details of the new product
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Product Name</Label>
-                      <Input id="name" placeholder="Enter product name" className="bg-slate-700 border-slate-600 text-white" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="category">Category</Label>
-                      <Select>
-                        <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                          <SelectValue placeholder="Select category" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-slate-800 border-slate-700 text-white">
-                          <SelectItem value="groceries">Groceries</SelectItem>
-                          <SelectItem value="beverages">Beverages</SelectItem>
-                          <SelectItem value="snacks">Snacks</SelectItem>
-                          <SelectItem value="dairy">Dairy</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="price">Price ($)</Label>
-                        <Input id="price" type="number" placeholder="0.00" className="bg-slate-700 border-slate-600 text-white" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="stock">Stock</Label>
-                        <Input id="stock" type="number" placeholder="0" className="bg-slate-700 border-slate-600 text-white" />
-                      </div>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button className="bg-cyan-500 hover:bg-cyan-600">Add Product</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+              <Button className="bg-cyan-500 hover:bg-cyan-600" onClick={() => setShowAddProduct(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Product
+              </Button>
             </div>
 
+            {/* Add / Edit Product Modal */}
+            <AddProductModal
+              isOpen={showAddProduct || editingProduct !== null}
+              onClose={() => { setShowAddProduct(false); setEditingProduct(null); }}
+              editProduct={editingProduct}
+              onSubmit={(data) => {
+                if (editingProduct) {
+                  // Edit mode — update matching product in place
+                  setProductData(prev => prev.map(p =>
+                    p.item_id === data.item_id ? { ...p, ...data } : p
+                  ));
+                } else {
+                  // Add mode — append with generated item_id
+                  const nextId = `ITEM${String(productData.length + 1).padStart(3, '0')}`;
+                  setProductData(prev => [...prev, { ...data, item_id: nextId }]);
+                }
+              }}
+            />
+
+            {/* Table */}
             <Card className="bg-slate-800/50 border-slate-700">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-white">All Products</CardTitle>
+                  <div className="flex items-center gap-3">
+                    <CardTitle className="text-white">All Products</CardTitle>
+                    <span style={{
+                      padding: '2px 10px', background: 'rgba(6,182,212,0.1)',
+                      border: '1px solid rgba(6,182,212,0.25)', borderRadius: 20,
+                      color: '#67e8f9', fontSize: 12,
+                    }}>
+                      {productData.filter(p =>
+                        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        p.category_name.toLowerCase().includes(searchQuery.toLowerCase())
+                      ).length} items
+                    </span>
+                  </div>
                   <div className="relative w-64">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <Input
-                      placeholder="Search products..."
+                      placeholder="Search by name or category..."
                       className="pl-10 bg-slate-700 border-slate-600 text-white"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
@@ -375,50 +386,96 @@ export default function App() {
                 <Table>
                   <TableHeader>
                     <TableRow className="border-slate-700 hover:bg-slate-700/50">
-                      <TableHead className="text-slate-300">ID</TableHead>
+                      <TableHead className="text-slate-300">Item ID</TableHead>
                       <TableHead className="text-slate-300">Name</TableHead>
                       <TableHead className="text-slate-300">Category</TableHead>
+                      <TableHead className="text-slate-300">Weight Type</TableHead>
                       <TableHead className="text-slate-300">Price</TableHead>
-                      <TableHead className="text-slate-300">Stock</TableHead>
+                      <TableHead className="text-slate-300">Rack</TableHead>
+                      <TableHead className="text-slate-300">Pos</TableHead>
+                      <TableHead className="text-slate-300">Labels</TableHead>
                       <TableHead className="text-slate-300">Status</TableHead>
                       <TableHead className="text-slate-300">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {productData.map((product) => (
-                      <TableRow key={product.id} className="border-slate-700 hover:bg-slate-700/30">
-                        <TableCell className="text-slate-300">{product.id}</TableCell>
-                        <TableCell className="text-white font-medium">{product.name}</TableCell>
-                        <TableCell className="text-slate-300">{product.category}</TableCell>
-                        <TableCell className="text-white">${product.price}</TableCell>
-                        <TableCell className="text-slate-300">{product.stock}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              product.status === 'In Stock'
-                                ? 'default'
-                                : product.status === 'Low Stock'
-                                  ? 'secondary'
-                                  : 'destructive'
-                            }
-                          >
-                            {product.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button size="sm" variant="ghost" className="text-blue-400 hover:text-blue-300 hover:bg-slate-700">
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button size="sm" variant="ghost" className="text-red-400 hover:text-red-300 hover:bg-slate-700">
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {productData
+                      .filter(p =>
+                        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        p.category_name.toLowerCase().includes(searchQuery.toLowerCase())
+                      )
+                      .map((product) => (
+                        <TableRow key={product.item_id} className="border-slate-700 hover:bg-slate-700/30">
+                          <TableCell className="text-slate-400 font-mono text-xs">{product.item_id}</TableCell>
+                          <TableCell className="text-white font-medium">{product.name}</TableCell>
+                          <TableCell>
+                            <span style={{ fontSize: 12, color: '#94a3b8' }}>
+                              <span style={{ color: '#64748b', fontSize: 10 }}>{product.category_id}</span>
+                              {' · '}
+                              {product.category_name}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={product.weight_type === 'fixed' ? 'default' : 'secondary'} className="text-xs">
+                              {product.weight_type === 'fixed' ? `📦 Fixed${product.weight_g ? ` · ${product.weight_g}g` : ''}` : '⚖️ Variable'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-white text-sm">
+                            {product.weight_type === 'fixed'
+                              ? `₹${product.price}`
+                              : `₹${product.unit_price_per_kg}/kg`}
+                          </TableCell>
+                          <TableCell>
+                            <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#67e8f9', background: 'rgba(6,182,212,0.1)', padding: '2px 6px', borderRadius: 4 }}>
+                              {product.rack_id}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-slate-300 text-sm text-center">{product.position_index}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {product.label_variants.slice(0, 2).map((lv: string, i: number) => (
+                                <span key={i} style={{ fontSize: 10, color: '#94a3b8', background: 'rgba(71,85,105,0.3)', padding: '1px 6px', borderRadius: 10, whiteSpace: 'nowrap' }}>
+                                  {lv}
+                                </span>
+                              ))}
+                              {product.label_variants.length > 2 && (
+                                <span style={{ fontSize: 10, color: '#64748b' }}>+{product.label_variants.length - 2}</span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={product.is_active ? 'default' : 'destructive'} className="text-xs">
+                              {product.is_active ? '● Active' : '○ Inactive'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button size="sm" variant="ghost" className="text-blue-400 hover:text-blue-300 hover:bg-slate-700"
+                                onClick={() => setEditingProduct(product)}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                size="sm" variant="ghost" className="text-red-400 hover:text-red-300 hover:bg-slate-700"
+                                onClick={() => setProductData(prev => prev.filter(p => p.item_id !== product.item_id))}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
                   </TableBody>
                 </Table>
+                {productData.filter(p =>
+                  p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  p.category_name.toLowerCase().includes(searchQuery.toLowerCase())
+                ).length === 0 && (
+                  <div className="text-center py-12 text-slate-500">
+                    <p className="text-lg mb-1">No products found</p>
+                    <p className="text-sm">Try a different search or add a new product</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
