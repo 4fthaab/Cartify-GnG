@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { useState } from "react";
 
 interface BillingScreenProps {
-  onBack: () => void;   // Continue shopping
-  onDone: () => void;   // Finish/Exit
+  onBack: () => void;
+  onDone: (method: "upi" | "cash") => void;
 }
 
 const purchasedItems = [
@@ -22,6 +22,8 @@ export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
   const subtotal = purchasedItems.reduce((sum, item) => sum + item.price, 0);
   const savings = 2.5;
   const total = subtotal - savings;
+
+
 
   const [paymentMethod, setPaymentMethod] = useState<string | null>(null);
 
@@ -91,36 +93,24 @@ export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
           {/* Payment Options */}
           <div className="mb-6">
             <p className="font-semibold text-slate-800 mb-3">Select Payment Method</p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <button
                 onClick={() => setPaymentMethod("upi")}
-                className={`flex items-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                  paymentMethod === "upi"
-                    ? "border-green-500 bg-green-50 shadow-md"
-                    : "border-slate-200 hover:border-green-300 hover:bg-slate-50"
-                }`}
+                className={`flex items-center gap-2 p-4 rounded-xl border-2 transition-all ${paymentMethod === "upi"
+                  ? "border-green-500 bg-green-50 shadow-md"
+                  : "border-slate-200 hover:border-green-300 hover:bg-slate-50"
+                  }`}
               >
                 <Wallet className="h-5 w-5 text-green-500" />
                 <span className="font-medium">UPI</span>
               </button>
-              <button
-                onClick={() => setPaymentMethod("card")}
-                className={`flex items-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                  paymentMethod === "card"
-                    ? "border-green-500 bg-green-50 shadow-md"
-                    : "border-slate-200 hover:border-green-300 hover:bg-slate-50"
-                }`}
-              >
-                <CreditCard className="h-5 w-5 text-green-500" />
-                <span className="font-medium">Card</span>
-              </button>
+
               <button
                 onClick={() => setPaymentMethod("cash")}
-                className={`flex items-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                  paymentMethod === "cash"
-                    ? "border-green-500 bg-green-50 shadow-md"
-                    : "border-slate-200 hover:border-green-300 hover:bg-slate-50"
-                }`}
+                className={`flex items-center gap-2 p-4 rounded-xl border-2 transition-all ${paymentMethod === "cash"
+                  ? "border-green-500 bg-green-50 shadow-md"
+                  : "border-slate-200 hover:border-green-300 hover:bg-slate-50"
+                  }`}
               >
                 <ShoppingCart className="h-5 w-5 text-green-500" />
                 <span className="font-medium">Pay at Counter</span>
@@ -130,17 +120,22 @@ export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
 
           {/* Final Confirm */}
           <Button
-            onClick={onDone}
+            onClick={() => {
+              if (paymentMethod === "upi") {
+                onDone("upi");   // ✅ correct
+              } else if (paymentMethod === "cash") {
+                onDone("cash");  // ✅ correct
+              }
+
+            }}
             disabled={!paymentMethod}
             size="lg"
-            className={`w-full font-bold text-lg shadow-lg ${
-              paymentMethod
-                ? "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white"
-                : "bg-slate-200 text-slate-400 cursor-not-allowed"
-            }`}
+            className={`w-full font-bold text-lg shadow-lg ${paymentMethod
+              ? "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white"
+              : "bg-slate-200 text-slate-400 cursor-not-allowed"
+              }`}
           >
-            <CheckCircle2 className="mr-2 h-5 w-5" />
-            {paymentMethod === "cash" ? "Confirm & Pay at Counter" : "Pay Now"}
+            Pay Now
           </Button>
         </div>
       </div>
