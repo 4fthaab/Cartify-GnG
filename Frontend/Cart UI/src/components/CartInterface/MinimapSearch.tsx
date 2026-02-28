@@ -1,5 +1,6 @@
 import { Search, ChevronRight, LogOut, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import CartMapViewer from "./CartMapViewer";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import {
@@ -29,9 +30,38 @@ const staticItems: Record<string, { location: string; image: string }> = {
 };
 
 export const MinimapSearch = ({ onNext, onLogout }: MinimapSearchProps) => {
+  interface Rack {
+    id: string;
+    name: string;
+    row: number;
+    col: number;
+    width: number;
+    height: number;
+    color: string;
+  }
+
+  interface StoreLayout {
+    racks: Rack[];
+  }
+
+  const storeLayout: StoreLayout = {
+    racks: [
+      { id: "R1", name: "R1 Fruits", row: 2, col: 1, width: 2, height: 8, color: "#d4af37" },
+      { id: "R2", name: "R2 Vegetables", row: 2, col: 4, width: 2, height: 8, color: "#7ac943" },
+      { id: "R3", name: "R3 Cooking Essentials", row: 5, col: 8, width: 10, height: 2, color: "#e0c7c7" },
+      { id: "R4", name: "R4 Grains & Pulses", row: 2, col: 8, width: 10, height: 2, color: "#5ba3c9" },
+      { id: "R5", name: "R5 Snacks & Bakery", row: 7, col: 8, width: 6, height: 2, color: "#e5b95c" },
+      { id: "R6", name: "R6 Dairy & Beverages", row: 9, col: 8, width: 8, height: 2, color: "#6fa8dc" },
+      { id: "R7", name: "R7 Frozen & Meat 2", row: 9, col: 16, width: 6, height: 2, color: "#7bd3b3" },
+      { id: "R8", name: "R8 Frozen & Meat 1", row: 7, col: 16, width: 6, height: 2, color: "#65cbd0" },
+      { id: "R9", name: "R9 Personal Care", row: 2, col: 23, width: 2, height: 8, color: "#7d3ccf" },
+      { id: "R10", name: "R10 Household Cleaning", row: 2, col: 26, width: 2, height: 8, color: "#cfcfcf" },
+    ],
+  };
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [highlighted, setHighlighted] = useState<string | null>(null);
+  const [highlightedItem, setHighlightedItem] = useState<any>(null);
   const [popup, setPopup] = useState<{ name: string; image: string } | null>(
     null
   );
@@ -42,11 +72,21 @@ export const MinimapSearch = ({ onNext, onLogout }: MinimapSearchProps) => {
   // 🔍 Filter suggestions
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
-    if (!value.trim()) return setSuggestions([]);
-    const matches = Object.keys(staticItems).filter((item) =>
-      item.toLowerCase().includes(value.toLowerCase())
-    );
+
+    if (!value.trim()) {
+      setSuggestions([]);
+      return;
+    }
+
+    const matches = staticItems
+      .filter(item =>
+        item.name.toLowerCase().includes(value.toLowerCase())
+      )
+      .map(item => item.name);
+
     setSuggestions(matches);
+
+    // ❌ REMOVE highlight logic from here
   };
 
   // 📍 Handle item select
@@ -56,26 +96,42 @@ export const MinimapSearch = ({ onNext, onLogout }: MinimapSearchProps) => {
     setHighlighted(staticItems[itemName].location);
     setSelectedItem(itemName);
     setPopup({ name: itemName, image: staticItems[itemName].image });
-    
+
     // Show add to list dialog after a short delay
     setTimeout(() => {
       setShowAddItemDialog(true);
     }, 500);
-    
+
     // Auto-hide popup after 3 seconds
     setTimeout(() => setPopup(null), 3000);
+  };
+
+  const handleSuggestionSelect = (itemName: string) => {
+    setSearchQuery(itemName);
+    setSuggestions([]);
+
+    const selectedItem = staticItems.find(
+      item => item.name.toLowerCase() === itemName.toLowerCase()
+    );
+
+    if (selectedItem) {
+      setHighlightedItem({
+        rack_id: selectedItem.rack_id,
+        position_index: selectedItem.position_index,
+      });
+    }
   };
 
   // 🧮 Compartment generation (serpentine pattern)
   const generateCompartments = (rackIndex: number) => {
     const comps: number[] = [];
-    
-      for (let j = 1; j <= 25; j++) {
-        comps.push(j);
-      }
-      for (let j = 50; j >= 26; j--) {
-        comps.push(j);
-      }
+
+    for (let j = 1; j <= 25; j++) {
+      comps.push(j);
+    }
+    for (let j = 50; j >= 26; j--) {
+      comps.push(j);
+    }
     return comps;
   };
 
@@ -97,7 +153,20 @@ export const MinimapSearch = ({ onNext, onLogout }: MinimapSearchProps) => {
     // Navigate to main interface
     onNext();
   };
-
+  const staticItems = [
+    {
+      item_id: "ITEM036",
+      name: "Coconut Oil 1L",
+      rack_id: "str001r03",
+      position_index: 1,
+    },
+    {
+      item_id: "ITEM012",
+      name: "Apple",
+      rack_id: "str001r01",
+      position_index: 5,
+    },
+  ];
   return (
     <div className="h-screen w-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 overflow-hidden">
       <div className="h-full flex flex-col p-6">
@@ -135,18 +204,18 @@ export const MinimapSearch = ({ onNext, onLogout }: MinimapSearchProps) => {
             />
             {suggestions.length > 0 && (
               <div className="absolute top-full left-0 w-full bg-white rounded-xl shadow-xl mt-2 z-10 max-h-48 overflow-y-auto border border-slate-200">
-                {suggestions.map((item) => (
+                {suggestions.map((itemName) => (
                   <div
-                    key={item}
-                    onClick={() => handleSelect(item)}
-                    className="px-4 py-3 hover:bg-slate-50 cursor-pointer flex items-center gap-3 transition-colors"
+                    key={itemName}
+                    onClick={() => handleSuggestionSelect(itemName)}
+                    className="cursor-pointer p-2 hover:bg-gray-100"
                   >
-                    <img
-                      src={staticItems[item].image}
-                      alt={item}
+                    {/* <img
+                      src={staticItems[itemName].image}
+                      alt={itemName}
                       className="w-8 h-8 rounded-md object-cover"
-                    />
-                    <span className="font-medium text-slate-700">{item}</span>
+                    /> */}
+                    <span className="font-medium text-slate-700">{itemName}</span>
                   </div>
                 ))}
               </div>
@@ -157,15 +226,23 @@ export const MinimapSearch = ({ onNext, onLogout }: MinimapSearchProps) => {
         {/* Map Grid (4 racks × 50 compartments) */}
         <div className="flex-1 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl p-6 overflow-auto border border-slate-200">
           <div className="space-y-8">
-            <br></br>
-            {Array.from({ length: 4 }).map((_, rackIndex) => {
-              // const compartments = generateCompartments(rackIndex + 1);
-              return (
-                <>
-                </>
-              );
-            })}
-            <br></br>
+            <div className="flex-1 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl p-6 overflow-auto border border-slate-200">
+              <CartMapViewer highlightedItem={highlightedItem} />
+
+              {/* {storeLayout.racks.map((rack) => (
+                <div
+                  key={rack.id}
+                  style={{
+                    gridColumn: `${rack.col} / span ${rack.width}`,
+                    gridRow: `${rack.row} / span ${rack.height}`,
+                    backgroundColor: rack.color,
+                  }}
+                  className="rounded-lg shadow-md flex items-center justify-center text-xs font-semibold text-black"
+                >
+                  {rack.name}
+                </div>
+              ))} */}
+            </div>
           </div>
         </div>
 

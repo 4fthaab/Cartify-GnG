@@ -1,11 +1,17 @@
 import { QrCode, UserCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { QRCodeCanvas } from "qrcode.react";
+import { useEffect, useState } from "react";
 
 interface LoginScreenProps {
   onNext: () => void;
 }
 
 export const LoginScreen = ({ onNext }: LoginScreenProps) => {
+  const [cartId] = useState(`CART-${Math.floor(Math.random() * 100000)}`);
+  const [sessionId] = useState(`SESSION-${Math.floor(Math.random() * 100000)}`);
+
+  const qrData = `cartId=${cartId}&session=${sessionId}`;
   return (
     <div className="h-screen w-screen flex items-center justify-center bg-gradient-hero relative overflow-hidden">
       {/* Animated background elements */}
@@ -23,11 +29,33 @@ export const LoginScreen = ({ onNext }: LoginScreenProps) => {
 
         {/* QR Scan Section */}
         <div className="animate-fade-in delay-200">
-          <div className="bg-white/90 backdrop-blur-glass rounded-2xl p-8 shadow-glow mb-6">
-            <div className="w-48 h-48 bg-gradient-to-br from-primary/10 to-accent/10 rounded-xl flex items-center justify-center mb-4 animate-glow-pulse">
-              <QrCode className="w-32 h-32 text-primary" />
+          <div className="relative flex flex-col items-center">
+
+            {/* Glow Background */}
+            <div className="absolute w-80 h-80 bg-cyan-400/20 rounded-full blur-3xl"></div>
+
+            {/* Main QR Card */}
+            <div className="relative bg-white/90 backdrop-blur-xl p-10 rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.2)] border border-white/40 flex flex-col items-center">
+
+              <div className="p-4 bg-white rounded-2xl shadow-inner">
+                <QRCodeCanvas value={qrData} size={230} />
+              </div>
+
+              <h3 className="mt-6 text-xl font-semibold text-slate-800">
+                Scan to Connect
+              </h3>
+
+              <p className="text-sm text-slate-500 mt-1">
+                Cart ID: <span className="font-medium">{cartId}</span>
+              </p>
+
+              {/* Waiting Animation */}
+              <div className="flex items-center gap-2 mt-4 text-cyan-600 text-sm">
+                <span className="w-2 h-2 bg-cyan-500 rounded-full animate-ping"></span>
+                Waiting for mobile connection...
+              </div>
+
             </div>
-            <p className="text-foreground font-semibold text-lg">SCAN QR TO LOGIN</p>
           </div>
 
           <Button
