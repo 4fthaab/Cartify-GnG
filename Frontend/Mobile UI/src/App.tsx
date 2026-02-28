@@ -1,77 +1,74 @@
 import { useState, useEffect } from 'react';
-import { SplashScreen } from './components/SplashScreen';
 import { QRLoginScreen } from './components/QRLoginScreen';
 import { HomeScreen } from './components/HomeScreen';
 import { ShoppingListScreen } from './components/ShoppingListScreen';
 import { CartScreen } from './components/CartScreen';
 import { OffersScreen } from './components/OffersScreen';
-import { HelpScreen } from './components/HelpScreen';
+import { ReportIssueModal } from './components/ReportIssueModal';
+import { RecentOrdersScreen } from './components/RecentOrdersScreen';
+import { PaymentHistoryScreen } from './components/PaymentHistoryScreen';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<string>('splash');
   const [cartItems, setCartItems] = useState(0);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isCartLinked, setIsCartLinked] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   useEffect(() => {
     if (currentScreen === 'splash') {
-      const timer = setTimeout(() => {
-        setCurrentScreen('qr-login');
-      }, 2000);
+      const timer = setTimeout(() => setCurrentScreen('qr-login'), 2000);
       return () => clearTimeout(timer);
     }
   }, [currentScreen]);
 
-  const handleLogin = () => {
-    setCurrentScreen('home');
-  };
-
   const handleNavigate = (screen: string) => {
-    setCurrentScreen(screen);
+    if (screen === 'report') {
+      setShowReportModal(true);
+    } else {
+      setCurrentScreen(screen);
+    }
   };
 
-  const handleBack = () => {
-    setCurrentScreen('home');
-  };
-
-  const toggleTheme = () => {
-    setIsDarkMode(!isDarkMode);
-  };
-
+  const handleBack = () => setCurrentScreen('home');
+  const toggleTheme = () => setIsDarkMode(!isDarkMode);
   const handleCartLinked = () => {
     setIsCartLinked(true);
-    setCartItems(3); // Sync cart items count
-    // Return to home after a brief delay
-    setTimeout(() => {
-      setCurrentScreen('home');
-    }, 500);
+    setCartItems(3);
+    setTimeout(() => setCurrentScreen('home'), 500);
   };
 
   return (
-    <div className="size-full bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
-      {/* iPhone 16 Pro Frame - 393x852px */}
-      <div className={`w-full max-w-[393px] h-full max-h-[852px] bg-background shadow-2xl rounded-[3rem] overflow-hidden relative ${isDarkMode ? 'dark' : ''}`}>
-        {currentScreen === 'splash' && <SplashScreen />}
-        {currentScreen === 'qr-login' && <QRLoginScreen onLogin={handleLogin} />}
+    <div className="flex items-center justify-center min-h-screen bg-[#1a2b3c]">
+      <div className={`w-[393px] h-[852px] bg-background shadow-2xl rounded-[3rem] overflow-hidden relative flex flex-col ${isDarkMode ? 'dark' : ''}`}>
+
+        {currentScreen === 'qr-login' && (
+          <div className="flex-1 min-h-0"><QRLoginScreen onLogin={() => setCurrentScreen('home')} /></div>
+        )}
         {currentScreen === 'home' && (
-          <HomeScreen 
-            onNavigate={handleNavigate} 
-            cartItems={cartItems} 
-            isDarkMode={isDarkMode} 
-            onToggleTheme={toggleTheme}
-            isCartLinked={isCartLinked}
-          />
+          <div className="flex-1 min-h-0">
+            <HomeScreen onNavigate={handleNavigate} cartItems={cartItems} isDarkMode={isDarkMode} onToggleTheme={toggleTheme} isCartLinked={isCartLinked} />
+          </div>
         )}
-        {currentScreen === 'list' && <ShoppingListScreen onBack={handleBack} />}
+        {currentScreen === 'list' && (
+          <div className="flex-1 min-h-0"><ShoppingListScreen onBack={handleBack} /></div>
+        )}
         {currentScreen === 'cart' && (
-          <CartScreen 
-            onBack={handleBack} 
-            isCartLinked={isCartLinked}
-            onCartLinked={handleCartLinked}
-          />
+          <div className="flex-1 min-h-0"><CartScreen onBack={handleBack} isCartLinked={isCartLinked} onCartLinked={handleCartLinked} /></div>
         )}
-        {currentScreen === 'offers' && <OffersScreen onBack={handleBack} />}
-        {currentScreen === 'help' && <HelpScreen onBack={handleBack} />}
+        {currentScreen === 'offers' && (
+          <div className="flex-1 min-h-0"><OffersScreen onBack={handleBack} /></div>
+        )}
+        {currentScreen === 'orders' && (
+          <div className="flex-1 min-h-0"><RecentOrdersScreen onBack={handleBack} /></div>
+        )}
+        {currentScreen === 'payments' && (
+          <div className="flex-1 min-h-0"><PaymentHistoryScreen onBack={handleBack} /></div>
+        )}
+
+        {/* Modal overlay */}
+        {showReportModal && <ReportIssueModal onClose={() => setShowReportModal(false)} />}
+
       </div>
     </div>
   );
