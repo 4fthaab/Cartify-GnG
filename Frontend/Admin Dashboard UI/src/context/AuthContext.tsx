@@ -2,7 +2,7 @@ import { createContext, useContext, useState, ReactNode } from 'react';
 
 // ─── Static credentials (replace with real auth later) ───────────────────────
 const ADMIN_USERNAME = 'thelha';
-const ADMIN_PASSWORD = 'cartify2025';
+const ADMIN_PASSWORD = '1234';
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface AuthContextType {
