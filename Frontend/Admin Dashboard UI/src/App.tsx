@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useAuth } from './context/AuthContext';
+import LoginPage from './pages/LoginPage';
 import { Home, Database, Tag, MessageSquare, Users, BarChart3, LogOut, Search, Plus, Edit, Trash2, Eye } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
@@ -16,8 +18,12 @@ import MapEditorPage from './pages/MapEditorPage.jsx';  // .jsx import works fin
 import { Map as MapIcon } from 'lucide-react';
 
 export default function App() {
+  const { isAuthenticated, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Show login page if not authenticated
+  if (!isAuthenticated) return <LoginPage />;
 
   // Mock data for analytics
   const salesData = [
@@ -162,7 +168,7 @@ export default function App() {
                 <MapIcon className="w-4 h-4 mr-2" />
                 Map Editor
               </Button>
-              <Button variant="ghost" className="text-white">
+              <Button variant="ghost" className="text-white" onClick={logout}>
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
               </Button>
