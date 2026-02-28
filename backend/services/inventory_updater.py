@@ -20,7 +20,7 @@ def deduct_stock_after_payment(order_doc: dict):
         qty = item.get("qty", 1)
 
         # Find the inventory record for this item (latest batch)
-        inv_doc = inventory.find_one({"item_id": item_id}, sort=[("last_updated", -1)])
+        inv_doc = inventory.find_one({"item_id": item_id,"store_id": order_doc.get("store_id")}, sort=[("last_updated", -1)])
         if not inv_doc:
             print(f"⚠️ No inventory found for {item_id}")
             continue
