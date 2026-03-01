@@ -82,6 +82,23 @@ def get_receipt_detail(order_id: str):
         raise HTTPException(status_code=404, detail="Order not found")
     return _clean(order)
 
+# ─────────────────────────────────────────────
+# PAYMENTS
+# ─────────────────────────────────────────────
+
+@router.get("/payments/{user_id}")
+def get_user_payments(user_id: str):
+    """
+    Return all payments made by user (newest first).
+    """
+    db = get_db()
+    payments = list(
+        db["payments"].find(
+            {"user_id": user_id},
+            {"_id": 0}
+        ).sort("created_at", -1)
+    )
+    return {"payments": _clean(payments), "count": len(payments)}
 
 # ─────────────────────────────────────────────
 # ORDER HISTORY
@@ -125,6 +142,7 @@ def report_issue(data: dict):
         "user_id": user_id,
         "subject": subject,
         "description": description,
+        "store_id": data.get("store_id"),
         "order_id": data.get("order_id"),
         "status": "open",          # open | in_progress | resolved
         "created_at": datetime.utcnow().isoformat(),
@@ -217,3 +235,19 @@ def get_target_ratings(target_type: str, target_id: str):
         return {"average": None, "count": 0, "ratings": []}
     avg = round(sum(r["rating"] for r in ratings) / len(ratings), 2)
     return {"average": avg, "count": len(ratings), "ratings": _clean(ratings)}
+
+@router.get("/loyalty/{user_id}")
+def get_loyalty(user_id: str):
+    db = get_db()
+    user = db["users"].find_one(
+        {"user_id": user_id},
+        {"_id": 0, "loyalty_points": 1}
+    )
+
+    if not user:
+        return {"error": "User not found"}
+
+    return {
+        "user_id": user_id,
+        "loyalty_points": user.get("loyalty_points", 0)
+    }

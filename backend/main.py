@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from routers import store,cart,path_optimizer,alerts,shopping_list,auth,mock_payment,admin_store,admin_dashboard,admin_auth,admin_items,admin_inventory,admin_alerts,admin_carts,admin_layout,admin_offers,admin_orders
+from routers import store,cart,path_optimizer,alerts,shopping_list,user,auth,mock_payment,admin_store,admin_dashboard,admin_issues,admin_ratings,admin_auth,admin_items,admin_inventory,admin_alerts,admin_carts,admin_layout,admin_offers,admin_orders,offers
 from utils.db import connect_to_mongo
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
@@ -21,10 +21,13 @@ app.include_router(admin_carts.router)
 app.include_router(admin_offers.router)  
 app.include_router(admin_alerts.router)
 app.include_router(admin_layout.router)
-
+app.include_router(admin_issues.router)
+app.include_router(admin_ratings.router)
 
 app.include_router(auth.router)
 app.include_router(cart.router)
+app.include_router(offers.router)
+app.include_router(user.router)
 app.include_router(shopping_list.router)
 app.include_router(path_optimizer.router)
 app.include_router(alerts.router)

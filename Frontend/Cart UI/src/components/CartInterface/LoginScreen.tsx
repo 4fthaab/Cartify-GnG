@@ -8,10 +8,13 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen = ({ onNext }: LoginScreenProps) => {
-  const [cartId] = useState(`CART-${Math.floor(Math.random() * 100000)}`);
-  const [sessionId] = useState(`SESSION-${Math.floor(Math.random() * 100000)}`);
+  const [cartId] = useState("CART102");
+  const [storeId] = useState("STORE001");
 
-  const qrData = `cartId=${cartId}&session=${sessionId}`;
+  const qrData = JSON.stringify({
+    cart_id: "CART102",
+    store_id: "STORE001"
+  });
   return (
     <div className="h-screen w-screen flex items-center justify-center bg-gradient-hero relative overflow-hidden">
       {/* Animated background elements */}

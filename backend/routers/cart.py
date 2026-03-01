@@ -40,8 +40,8 @@ def cart_login(payload: dict):
     store_id = payload.get("store_id")
     cart_id = payload.get("cart_id")
 
-    if not user_id or not store_id:
-        return {"error": "Missing user_id or store_id"}
+    if not user_id:
+        return {"error": "Missing user_id"}
 
     # Step 1: Find and lock the cart
     if cart_id:
@@ -62,7 +62,7 @@ def cart_login(payload: dict):
             return {"error": "No available carts right now. Please wait."}
         cart_id = cart["cart_id"]
 
-    # Step 2: Create the session info
+    # Step 2: Create session variables
     session_id = f"{cart_id}_SESS_{uuid.uuid4().hex[:6].upper()}"
     session_doc = {
         "session_id": session_id,
@@ -76,7 +76,7 @@ def cart_login(payload: dict):
         "shopping_list_id": None
     }
 
-    # Step 3: Update cart with current session
+    # Step 3: Update cart with current session and lock status
     db["carts"].update_one(
         {"cart_id": cart_id},
         {"$set": {"current_session": session_doc, "store_id": store_id , "linked_user_id": user_id}}
@@ -90,6 +90,14 @@ def cart_login(payload: dict):
         "user_id": user_id,
         "status": "in_use"
     }
+
+@router.get("/session/{cart_id}")
+def get_cart_session(cart_id: str):
+    db = get_db()
+    cart = db["carts"].find_one({"cart_id": cart_id})
+    if not cart or "current_session" not in cart:
+        return {"error": "No active session"}
+    return cart["current_session"]
 
 # ==========================================================
 # UNIFIED CART EVENT (ADD + REMOVE)
@@ -107,7 +115,6 @@ def cart_event(payload: dict):
         "cart_total_weight_g": 1250
     }
     """
-
     db = get_db()
 
     cart_id = payload.get("cart_id")
@@ -213,6 +220,57 @@ def cart_event(payload: dict):
         # Update location
         update_location_from_item(cart_id=cart_id, item=matched_item, store_id=store_id)
 
+        cart_data = db["carts"].find_one({"cart_id": cart_id})
+        linked_user_id = cart_data.get("linked_user_id")
+        linked_list_id = cart_data.get("linked_list_id")
+
+        if linked_user_id and linked_list_id:
+            matched_name = matched_item.get("name")
+            label_variants = [v.lower() for v in matched_item.get("label_variants", [])]
+            all_aliases = label_variants + [matched_name.lower()]
+
+            shopping_list = db["shopping_lists"].find_one({
+                "user_id": linked_user_id,
+                "list_id": linked_list_id
+            })
+
+            if shopping_list:
+                updated_items = []
+
+                for item in shopping_list.get("items", []):
+                    if isinstance(item, dict):
+                        item_name_lower = item.get("name", "").lower().strip()
+                    else:
+                        item_name_lower = str(item).lower().strip()
+
+                    if any(alias in item_name_lower or item_name_lower in alias for alias in all_aliases):
+                        if isinstance(item, dict):
+                            item["bought"] = True
+                        else:
+                            item = {"name": item, "bought": True}
+
+                    updated_items.append(item)
+
+                db["shopping_lists"].update_one(
+                    {"user_id": linked_user_id, "list_id": linked_list_id},
+                    {"$set": {"items": updated_items}}
+                )
+
+            # Also update cart copy of user_list_items if exists
+            cart_user_items = cart_data.get("user_list_items", [])
+            new_cart_user_items = []
+
+            for ui in cart_user_items:
+                ui_name = ui.get("name", "").lower().strip()
+                if any(alias in ui_name or ui_name in alias for alias in all_aliases):
+                    ui["bought"] = True
+                new_cart_user_items.append(ui)
+
+            db["carts"].update_one(
+                {"cart_id": cart_id},
+                {"$set": {"user_list_items": new_cart_user_items}}
+            )
+
         detection_doc["status"] = "verified"
         detection_doc["matched_item"] = matched_item
         db["detections"].insert_one(detection_doc)
@@ -250,8 +308,7 @@ def cart_event(payload: dict):
         if not matched:
             res = decide_removal(
                 {"candidate_items": candidates},
-                cart_id
-            )
+                cart_id)
             if res.get("status") != "removed":
                 return {"status": res.get("status"), "candidates": res.get("candidates", [])}
             matched = res.get("matched_item")
@@ -367,7 +424,9 @@ def checkout_cart(payload: dict):
     db = get_db()
     cart_id = payload.get("cart_id")
     payment_method = payload.get("payment_method", "upi")
-
+    
+    # 🔥 1. Try to get user_id from the frontend payload first
+    user_id = payload.get("user_id")
     if not cart_id:
         return {"error": "cart_id required"}
 
@@ -375,16 +434,33 @@ def checkout_cart(payload: dict):
     if not cart:
         return {"error": "Cart not found"}
 
-    # ✅ Lock the cart
+    # 🔥 2. Fallback: Extract from current_session if payload didn't have it
+    if not user_id:
+        current_session = cart.get("current_session", {})
+        user_id = current_session.get("user_id") or cart.get("linked_user_id")
+
+    # Lock the cart
     lock_cart(cart_id)
 
     checkout_time = datetime.utcnow().isoformat()
+    
+    # ✅ Correct update_one syntax: (Filter, Update)
     db["carts"].update_one(
-        {"cart_id": cart_id},
-        {"$set": {"checked_out": True, "checkout_time": checkout_time, "linked": False}}
+        {"cart_id": cart_id},  # Find the specific cart
+        {
+            "$set": {
+                "checked_out": True, 
+                "checkout_time": checkout_time, 
+                "linked": False,
+                "items": [],           # 🧹 Clears the items list
+                "total_items": 0,      # 🧹 Resets count
+                "total_price": 0,      # 🧹 Resets price
+                "total_weight": 0      # 🧹 Resets weight
+            }
+        }
     )
 
-    user_id = cart.get("linked_user_id")
+    # user_id = cart.get("linked_user_id")
     store_id = cart.get("store_id")
     total_price = cart.get("total_price", 0)
 
@@ -425,7 +501,10 @@ def checkout_cart(payload: dict):
     if linked_user_id and linked_list_id:
         old_list = db["shopping_lists"].find_one({"user_id": linked_user_id, "list_id": linked_list_id})
         if old_list:
-            not_bought = [i for i in old_list.get("items", []) if not i.get("bought")]
+            not_bought = [
+                i for i in old_list.get("items", []) 
+                if not (isinstance(i, dict) and i.get("bought"))
+            ]
             not_found = old_list.get("not_found", [])
             new_items = not_bought + not_found
 

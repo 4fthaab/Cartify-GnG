@@ -14,11 +14,13 @@ def create_shopping_list(payload: dict):
     """
     db = get_db()
     user_id = payload.get("user_id")
-    items = payload.get("items")
+    items = payload.get("items", [])
 
-    if not user_id or not items:
-        return {"error": "Missing required fields (user_id or items)"}
+    if not user_id:
+        return {"error": "Missing required field: user_id"}
 
+    if items is None:
+        items = []
     # 🔥 Normalize items to dict format
     normalized_items = []
     for item in items:
@@ -309,6 +311,22 @@ def mark_item_as_bought(payload: dict = Body(...)):
         "cart_id": cart_id,
         "list_id": list_id
     }
+@router.post("/add-item")
+def add_item_to_list(payload: dict):
+    db = get_db()
+    user_id = payload.get("user_id")
+    list_id = payload.get("list_id")
+    item_name = payload.get("item_name")
+
+    if not (user_id and list_id and item_name):
+        return {"error": "Missing required fields"}
+
+    db["shopping_lists"].update_one(
+        {"user_id": user_id, "list_id": list_id},
+        {"$push": {"items": {"name": item_name}}}
+    )
+
+    return {"message": "Item added successfully"}
 
 @router.post("/delete")
 def delete_shopping_list(payload: dict):

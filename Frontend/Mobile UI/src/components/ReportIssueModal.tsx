@@ -1,6 +1,8 @@
 import { CheckCircle, AlertCircle } from "lucide-react";
 import { useState } from "react";
 
+const API_BASE = "http://localhost:8000";
+
 interface Props {
   onClose: () => void;
 }
@@ -9,13 +11,52 @@ export function ReportIssueModal({ onClose }: Props) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!title || !description) return;
-    setSubmitted(true);
-    setTimeout(() => {
-      onClose();
-    }, 2000);
+
+    const stored = localStorage.getItem("user");
+    if (!stored) {
+      setError("User not logged in.");
+      return;
+    }
+
+    const user = JSON.parse(stored);
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await fetch(`${API_BASE}/user/report-issue`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          user_id: user.user_id,
+          subject: title,
+          description: description
+        })
+      });
+
+      const data = await res.json();
+
+      if (data.status === "reported") {
+        setSubmitted(true);
+        setTimeout(() => {
+          onClose();
+        }, 2000);
+      } else {
+        setError(data.error || "Failed to submit issue");
+      }
+
+    } catch (err) {
+      setError("Server error. Please try again.");
+    }
+
+    setLoading(false);
   };
 
   return (
@@ -42,39 +83,51 @@ export function ReportIssueModal({ onClose }: Props) {
           </div>
         ) : (
           <>
-            <div className="relative bg-gradient-to-r from-[#FF3347] to-[#FF5566] px-6 pt- pb-8 shrink-0">
+            <div className="bg-gradient-to-r from-[#FF3347] to-[#FF5566] px-6 pt-6 pb-8 shrink-0">
               <div className="w-11 h-10 rounded-2xl flex items-center justify-center mb-3">
-                <AlertCircle className="w-6 h-6 topMar text-white" />
+                <AlertCircle className="w-6 h-6 text-white" />
               </div>
               <h2 className="text-xl font-semibold text-white">Report an Issue</h2>
-              <p className="text-sm text-white/80 mt-1 h-10">Help us improve your experience</p>
+              <p className="text-sm text-white/80 mt-1">
+                Help us improve your experience
+              </p>
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 pt-6 pb-4 space-y-5 -mt-4 bg-background rounded-t-3xl">
+
               <div>
-                <label className="text-sm font-medium mb-2 block text-foreground">Issue Title</label>
+                <label className="text-sm font-medium mb-2 block text-foreground">
+                  Issue Title
+                </label>
                 <input
                   placeholder="e.g. Wrong item scanned..."
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full h-12 rounded-xl border border-border bg-input-background px-4 focus:outline-none focus:border-[#FF3347] text-sm transition-colors"
+                  className="w-full h-12 rounded-xl border border-border bg-input-background px-4 focus:outline-none focus:border-[#FF3347] text-sm"
                 />
               </div>
 
               <div>
-                <label className="text-sm font-medium mb-2 block text-foreground">Description</label>
+                <label className="text-sm font-medium mb-2 block text-foreground">
+                  Description
+                </label>
                 <textarea
                   placeholder="Tell us what went wrong in detail..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   maxLength={2000}
                   rows={4}
-                  className="w-full rounded-xl border border-border bg-input-background p-3 resize-none focus:outline-none focus:border-[#FF3347] text-sm transition-colors"
+                  className="w-full rounded-xl border border-border bg-input-background p-3 resize-none focus:outline-none focus:border-[#FF3347] text-sm"
                 />
                 <p className="text-xs text-muted-foreground mt-1 text-right">
                   {description.length} / 2000
                 </p>
               </div>
+
+              {error && (
+                <p className="text-red-500 text-sm">{error}</p>
+              )}
+
             </div>
 
             <div className="px-6 pb-6 pt-3 flex gap-3 shrink-0 bg-background">
@@ -84,12 +137,13 @@ export function ReportIssueModal({ onClose }: Props) {
               >
                 Cancel
               </button>
+
               <button
                 onClick={handleSubmit}
-                disabled={!title || !description}
-                className="flex-1 h-12 rounded-xl bg-[#FF3347] text-white text-sm font-medium shadow-md disabled:opacity-40 transition-opacity"
+                disabled={!title || !description || loading}
+                className="flex-1 h-12 rounded-xl bg-[#FF3347] text-white text-sm font-medium shadow-md disabled:opacity-40"
               >
-                Submit Report
+                {loading ? "Submitting..." : "Submit Report"}
               </button>
             </div>
           </>

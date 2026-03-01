@@ -42,7 +42,8 @@ def signup_user(data: dict):
         "password_hash": hash_password(password),
         "created_at": datetime.utcnow().isoformat(),
         "shopping_lists": [],
-        "receipts": []
+        "receipts": [],
+        "loyalty_points": 0
     })
 
     return {"status": "success", "user_id": user_id}

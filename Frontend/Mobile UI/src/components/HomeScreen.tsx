@@ -1,9 +1,9 @@
-import { Search, ShoppingCart, Menu, ListChecks, Gift, Sun, Moon, AlertCircle, ClockArrowUp, CreditCard } from 'lucide-react';
+import { Search, ShoppingCart, Menu, ListChecks, Gift, Sun, Moon, AlertCircle, ClockArrowUp, CreditCard, Scan, LogOut } from 'lucide-react';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Card } from './ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
-import { Scan } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 interface HomeScreenProps {
   onNavigate: (screen: string) => void;
@@ -13,17 +13,69 @@ interface HomeScreenProps {
   isCartLinked: boolean;
 }
 
+const API_BASE = "http://localhost:8000";
+
 export function HomeScreen({ onNavigate, cartItems, isDarkMode, onToggleTheme, isCartLinked }: HomeScreenProps) {
+  const storedUser = JSON.parse(localStorage.getItem("user") || "null");
+  const [offerBanners, setOfferBanners] = useState<any[]>([]);
+  const [loadingOffers, setLoadingOffers] = useState(true);
+
+  useEffect(() => {
+    const fetchOffers = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/offers/all`);
+        const data = await res.json();
+
+        if (data.offers) {
+          // Map backend fields to UI format
+          const mappedOffers = data.offers.map((offer: any) => ({
+            title: offer.title,
+            subtitle: offer.description || "Limited time offer",
+            color: "from-purple-500 to-pink-500", // fallback UI color
+            emoji: "🔥"
+          }));
+
+          setOfferBanners(mappedOffers);
+        }
+      } catch (err) {
+        console.error("Failed to fetch offers", err);
+      }
+      setLoadingOffers(false);
+    };
+
+    fetchOffers();
+  }, []);
+
+  // ── Logout Logic ────────────────────────────────────────────────
+  const handleLogout = async () => {
+    const cartSession = JSON.parse(localStorage.getItem("cart_session") || "{}");
+
+    // 1. If a cart is linked, log out of it on the backend
+    if (cartSession.cart_id) {
+      try {
+        await fetch(`${API_BASE}/cart/logout`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cart_id: cartSession.cart_id }) //
+        });
+      } catch (err) {
+        console.error("Failed to logout cart on backend", err);
+      }
+    }
+
+    // 2. Clear local storage to reset user state
+    localStorage.removeItem("user");
+    localStorage.removeItem("cart_session");
+
+    // 3. Navigate back to Splash Screen instead of Login directly
+    // This will show the "Cartify" intro animation again
+    onNavigate('splash');
+  };
+  
   const quickActions = [
     { icon: ListChecks, label: 'Shopping List', screen: 'list' },
     { icon: ShoppingCart, label: 'My Cart', screen: 'cart', badge: cartItems },
     { icon: Gift, label: 'Offers', screen: 'offers' }
-  ];
-
-  const offerBanners = [
-    { title: '50% OFF', subtitle: 'On dairy products', color: 'from-purple-500 to-pink-500', emoji: '🥛' },
-    { title: 'Price Drop', subtitle: 'Fresh vegetables', color: 'from-green-500 to-emerald-500', emoji: '🥬' },
-    { title: 'Buy 2 Get 1', subtitle: 'Bakery items', color: 'from-orange-500 to-amber-500', emoji: '🍞' },
   ];
 
   const menuItems = [
@@ -33,7 +85,7 @@ export function HomeScreen({ onNavigate, cartItems, isDarkMode, onToggleTheme, i
       iconColor: 'text-[#FF3347]',
       label: 'Report an Issue',
       sublabel: 'Let us know about problems',
-      screen: 'report',
+      action: () => onNavigate('report'),
     },
     {
       icon: ClockArrowUp,
@@ -41,7 +93,7 @@ export function HomeScreen({ onNavigate, cartItems, isDarkMode, onToggleTheme, i
       iconColor: 'text-blue-500',
       label: 'Recent Orders',
       sublabel: 'View your order history',
-      screen: 'orders',
+      action: () => onNavigate('orders'),
     },
     {
       icon: CreditCard,
@@ -49,7 +101,15 @@ export function HomeScreen({ onNavigate, cartItems, isDarkMode, onToggleTheme, i
       iconColor: 'text-green-600',
       label: 'Payment History',
       sublabel: 'Browse past payments',
-      screen: 'payments',
+      action: () => onNavigate('payments'),
+    },
+    {
+      icon: LogOut,
+      iconBg: 'bg-gray-500/10',
+      iconColor: 'text-gray-500',
+      label: 'Logout',
+      sublabel: 'Sign out and unlink cart',
+      action: handleLogout,
     },
   ];
 
@@ -59,7 +119,9 @@ export function HomeScreen({ onNavigate, cartItems, isDarkMode, onToggleTheme, i
       <div className="bg-card px-6 py-4 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <div className="flex-1">
-            <h2 className="text-xl text-foreground">Hello, Shopper!</h2>
+            <h2 className="text-xl text-foreground">
+              Hello, {storedUser?.name || "Shopper"}!
+            </h2>
             <p className="text-sm text-muted-foreground">Time to grab your favorites 🛍️</p>
           </div>
           <div className="flex items-center gap-2">
@@ -79,8 +141,8 @@ export function HomeScreen({ onNavigate, cartItems, isDarkMode, onToggleTheme, i
               <DropdownMenuContent align="end" className="w-64 bg-card border-border p-1">
                 {menuItems.map((item) => (
                   <DropdownMenuItem
-                    key={item.screen}
-                    onClick={() => onNavigate(item.screen)}
+                    key={item.label}
+                    onClick={item.action}
                     className="flex items-center gap-3 p-3 cursor-pointer rounded-xl"
                   >
                     <div className={`w-10 h-10 ${item.iconBg} rounded-full flex items-center justify-center flex-shrink-0`}>
@@ -95,11 +157,6 @@ export function HomeScreen({ onNavigate, cartItems, isDarkMode, onToggleTheme, i
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-        </div>
-
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-          <Input placeholder="Search products..." className="pl-10 bg-input-background border-0 rounded-xl h-12" />
         </div>
       </div>
 
@@ -163,7 +220,7 @@ export function HomeScreen({ onNavigate, cartItems, isDarkMode, onToggleTheme, i
             {offerBanners.map((offer, index) => (
               <Card
                 key={index}
-                className={`bg-gradient-to-r ${offer.color} border-0 p-5 rounded-2xl cursor-pointer hover:scale-[1.02] transition-transform`}
+                className={`bg-gradient-to-r ${offer.color} border-0 p-5 rounded-2xl cursor-pointer`}
                 onClick={() => onNavigate('offers')}
               >
                 <div className="flex items-center justify-between">
