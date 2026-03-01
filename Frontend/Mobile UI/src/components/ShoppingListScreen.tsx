@@ -47,7 +47,7 @@ export function ShoppingListScreen({ onBack }: ShoppingListScreenProps) {
           <h2 className="flex-1 text-foreground">Shopping List</h2>
         </div>
 
-        {/* Upload Options */}
+        {/* Upload Options
         <div className="grid grid-cols-2 gap-3">
           <Button variant="outline" className="rounded-xl h-12 gap-2">
             <Upload className="w-4 h-4" />
@@ -57,7 +57,7 @@ export function ShoppingListScreen({ onBack }: ShoppingListScreenProps) {
             <ScanText className="w-4 h-4" />
             Scan OCR
           </Button>
-        </div>
+        </div> */}
       </div>
 
       {/* Content */}

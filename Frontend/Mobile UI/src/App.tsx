@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { QRLoginScreen } from './components/QRLoginScreen';
+import { SplashScreen } from './components/SplashScreen';
 import { HomeScreen } from './components/HomeScreen';
 import { ShoppingListScreen } from './components/ShoppingListScreen';
 import { CartScreen } from './components/CartScreen';
@@ -15,12 +16,7 @@ export default function App() {
   const [isCartLinked, setIsCartLinked] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
 
-  useEffect(() => {
-    if (currentScreen === 'splash') {
-      const timer = setTimeout(() => setCurrentScreen('qr-login'), 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [currentScreen]);
+
 
   const handleNavigate = (screen: string) => {
     if (screen === 'report') {
@@ -35,13 +31,16 @@ export default function App() {
   const handleCartLinked = () => {
     setIsCartLinked(true);
     setCartItems(3);
-    setTimeout(() => setCurrentScreen('home'), 500);
+    setTimeout(() => setCurrentScreen('home'));
   };
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-[#1a2b3c]">
       <div className={`w-[393px] h-[852px] bg-background shadow-2xl rounded-[3rem] overflow-hidden relative flex flex-col ${isDarkMode ? 'dark' : ''}`}>
 
+        {currentScreen === 'splash' && (
+          <div className="flex-1 min-h-0"><SplashScreen onFinish={() => setCurrentScreen('qr-login')} /></div>
+        )}
         {currentScreen === 'qr-login' && (
           <div className="flex-1 min-h-0"><QRLoginScreen onLogin={() => setCurrentScreen('home')} /></div>
         )}
