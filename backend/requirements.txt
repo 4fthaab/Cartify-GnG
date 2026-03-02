@@ -6,4 +6,5 @@ pydantic-settings
 python-dotenv
 pdfkit
 certifi
-jwt
+PyJWT
+requests

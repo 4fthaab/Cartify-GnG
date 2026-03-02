@@ -16,33 +16,45 @@ def build_grid(layout: dict):
     entry_point = None
     billing_point = None
 
-    # 3️⃣ Mark blocked cells
+    # 3️⃣ Process elements safely
     for element in layout["elements"]:
 
-        x = element["x"]
-        y = element["y"]
-        w = element["w"]
-        h = element["h"]
+        element_type = element.get("type")
 
-        # Racks are blocked
-        if element["type"] == "rack":
-            for dx in range(w):
-                for dy in range(h):
-                    grid[y + dy][x + dx] = 0
+        # 🚫 Ignore aisle markers completely
+        if element_type == "aisle_marker":
+            continue
 
-        # Walls are blocked
-        if element["type"] == "blocked" and (element.get("zoneType") == "wall" or element.get("zoneType") == "restricted"):
-            for dx in range(w):
-                for dy in range(h):
-                    grid[y + dy][x + dx] = 0
+        x = element.get("x")
+        y = element.get("y")
 
-        # Entry
-        if element["type"] == "blocked" and element.get("zoneType") == "entry":
-            entry_point = (x + w // 2, y + h // 2)
+        # Only racks & blocked zones have width/height
+        if element_type in ["rack", "blocked"]:
+            w = element.get("w", 0)
+            h = element.get("h", 0)
 
-        # Billing
-        if element["type"] == "blocked" and element.get("zoneType") == "billing":
-            billing_point = (x + w // 2, y + h // 2)
+            # Racks are blocked
+            if element_type == "rack":
+                for dx in range(w):
+                    for dy in range(h):
+                        grid[y + dy][x + dx] = 0
+
+            # Walls & restricted areas are blocked
+            if element_type == "blocked":
+                zone = element.get("zoneType")
+
+                if zone in ["wall", "restricted"]:
+                    for dx in range(w):
+                        for dy in range(h):
+                            grid[y + dy][x + dx] = 0
+
+                # Entry
+                if zone == "entry":
+                    entry_point = (x + w // 2, y + h // 2)
+
+                # Billing
+                if zone == "billing":
+                    billing_point = (x + w // 2, y + h // 2)
 
     return grid, entry_point, billing_point
 
