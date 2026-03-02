@@ -143,7 +143,7 @@ def update_shopping_list(payload: dict = Body(...)):
 @router.post("/select")
 def select_shopping_list(payload: dict):
     """
-   { "user_id":"USR496713", "list_id":"USR496713_L1771856583", "cart_id":"CART102" }
+   { "user_id":"USR496713", "list_id":"USR496713_L1771856583", "cart_id":"CART103" }
     """
     from services.matcher import match_items
     from services.path_optimizer import optimize_path
@@ -234,7 +234,7 @@ def mark_item_as_bought(payload: dict = Body(...)):
     {
         "user_id": "USR123",
         "list_id": "USR123_L1730933212",
-        "cart_id": "CART102",
+        "cart_id": "CART103",
         "detected_label": "lays classic",
         "action": "mark"   # or "unmark"
     }

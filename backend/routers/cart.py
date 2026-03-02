@@ -129,7 +129,7 @@ def cart_event(payload: dict):
     """
     Hardware sends atomic event:
     {
-        "cart_id": "CART102",
+        "cart_id": "CART103",
         "event_type": "add" | "remove",
         "detected_label": "Brush",
         "camera_confidence": 0.93,
@@ -426,6 +426,104 @@ async def marker_update(payload: dict):
 
     return {"message": "Location updated from marker"}
 
+@router.post("/confirm-list")
+def confirm_list(payload: dict):
+    """
+    Two-step list linking. Cart UI previews the list first, then calls this
+    endpoint only when user taps Confirm. This prevents accidental early linking.
+    { "cart_id": "CART109", "user_id": "USR...", "list_id": "USR..._L..." }
+    """
+    from services.matcher import match_items
+    db = get_db()
+    cart_id  = payload.get("cart_id")
+    user_id  = payload.get("user_id")
+    list_id  = payload.get("list_id")
+
+    if not all([cart_id, user_id, list_id]):
+        return {"error": "cart_id, user_id, list_id required"}
+
+    sl = db["shopping_lists"].find_one({"user_id": user_id, "list_id": list_id})
+    if not sl:
+        return {"error": "Shopping list not found"}
+
+    cart = db["carts"].find_one({"cart_id": cart_id})
+    store_id = cart.get("store_id") if cart else None
+
+    raw_items = sl.get("items", [])
+    item_names = [{"name": i["name"] if isinstance(i, dict) else i} for i in raw_items]
+    match_result = match_items(item_names, store_id) if store_id else {"matched_items": []}
+    backend_matches = match_result.get("matched_items", [])
+
+    # Fetch store layout to get friendly rack names
+    layout = db["store_layouts"].find_one({"store_id": store_id}, {"_id": 0}) if store_id else None
+    rack_name_map = {}
+    if layout:
+        for el in layout.get("elements", []):
+            if el.get("type") == "rack":
+                rack_name_map[el["rack_id"]] = el.get("name", el["rack_id"])
+
+    for bm in backend_matches:
+        rid = bm.get("rack_id")
+        if rid and rid in rack_name_map:
+            bm["rack_name"] = rack_name_map[rid]
+
+    user_list_items = []
+    for i in raw_items:
+        if isinstance(i, dict):
+            user_list_items.append({"name": i.get("name", ""), "bought": i.get("bought", False)})
+        else:
+            user_list_items.append({"name": str(i), "bought": False})
+
+    db["carts"].update_one(
+        {"cart_id": cart_id},
+        {"$set": {
+            "linked_list_id": list_id,
+            "linked_user_id": user_id,
+            "list_name": sl.get("list_name", "My List"),
+            "user_list_items": user_list_items,
+            "backend_matches": backend_matches,
+            "linked_at": datetime.utcnow().isoformat(),
+        }}
+    )
+    return {
+        "status": "linked",
+        "list_id": list_id,
+        "list_name": sl.get("list_name"),
+        "item_count": len(user_list_items),
+        "backend_matches": convert_objectid(backend_matches),
+    }
+
+
+@router.get("/payment-session/{cart_id}")
+def get_payment_session(cart_id: str):
+    """
+    Mobile app polls this after checkout is initiated on the cart UI.
+    Returns the active pending payment_id + amount + qr_payload so mobile can
+    display a Pay button and scan the QR shown on the cart screen.
+    """
+    db = get_db()
+    cart = db["carts"].find_one({"cart_id": cart_id}, {"_id": 0})
+    if not cart:
+        return {"error": "Cart not found"}
+
+    payment_id = cart.get("active_payment_id")
+    if not payment_id:
+        return {"pending": False}
+
+    pay = db["payments"].find_one({"payment_id": payment_id}, {"_id": 0})
+    if not pay or pay.get("status") != "pending":
+        return {"pending": False}
+
+    return {
+        "pending": True,
+        "payment_id": payment_id,
+        "amount": pay.get("amount", 0),
+        "currency": pay.get("currency", "INR"),
+        "qr_payload": pay.get("qr_payload"),
+        "order_id": pay.get("order_id"),
+    }
+
+
 @router.post("/checkout")
 def checkout_cart(payload: dict):
     """
@@ -435,7 +533,7 @@ def checkout_cart(payload: dict):
     - Initiate mock payment
     - Cleanup shopping list (forward unbought items)
     
-    { "cart_id":"CART102", "payment_method":"upi" }
+    { "cart_id":"CART103", "payment_method":"upi" }
     """
     from utils.db import get_db
     from utils.cart_utils import lock_cart
@@ -465,19 +563,16 @@ def checkout_cart(payload: dict):
     lock_cart(cart_id)
 
     checkout_time = datetime.utcnow().isoformat()
-    
-    # ✅ Correct update_one syntax: (Filter, Update)
+
+    # Mark as checked-out but DO NOT clear items yet — we need them for the order doc
     db["carts"].update_one(
-        {"cart_id": cart_id},  # Find the specific cart
+        {"cart_id": cart_id},
         {
             "$set": {
-                "checked_out": True, 
-                "checkout_time": checkout_time, 
+                "checked_out": True,
+                "checkout_time": checkout_time,
                 "linked": False,
-                "items": [],           # 🧹 Clears the items list
-                "total_items": 0,      # 🧹 Resets count
-                "total_price": 0,      # 🧹 Resets price
-                "total_weight": 0      # 🧹 Resets weight
+                "pending_payment": True,
             }
         }
     )
@@ -514,6 +609,20 @@ def checkout_cart(payload: dict):
         payment_data = payment_resp.json()
     except Exception as e:
         payment_data = {"error": f"Payment initiation failed: {str(e)}"}
+
+    # Store payment_id on cart so mobile can poll for it, and NOW clear cart items
+    active_payment_id = payment_data.get("payment_id")
+    db["carts"].update_one(
+        {"cart_id": cart_id},
+        {"$set": {
+            "active_payment_id": active_payment_id,
+            "active_payment_amount": total_price,
+            "items": [],
+            "total_items": 0,
+            "total_price": 0,
+            "total_weight": 0,
+        }}
+    )
 
     # ✅ Handle shopping list forwarder
     linked_user_id = cart.get("linked_user_id")
@@ -614,7 +723,7 @@ def cart_logout(payload: dict):
     """
     Called after receipt printed / session timeout.
     Cleans cart and removes session data completely.
-    Payload: { "cart_id": "CART102" }
+    Payload: { "cart_id": "CART103" }
     """
     db = get_db()
     cart_id = payload.get("cart_id")

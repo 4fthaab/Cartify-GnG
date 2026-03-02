@@ -8,22 +8,22 @@ import {
 import { cn } from "@/lib/utils";
 
 const BASE_URL = "http://192.168.2.22:8000";
-const CART_ID  = "CART109";
-const POLL_MS  = 2500;
+const CART_ID = "CART103";
+const POLL_MS = 2500;
 
 // ─── Store Layout (embedded from ST001.json) ───────────────────────────────────
-// Rack id → friendly display name lookup
+// Rack id → friendly display name lookup (fallback if backend doesn't return rack_name)
 const RACK_NAME: Record<string, string> = {
-  "str001r01":  "Fruits",
-  "str001r02":  "Vegetables",
-  "str001r03":  "Cooking",
-  "str001r04":  "Grains",
-  "str001r05":  "Snacks",
-  "str001r06":  "Dairy & Bev",
-  "str001r07":  "Frozen/Meat",
-  "str001r08":  "Personal Care",
-  "str001r09":  "HH Cleaning",
-  "str001r10":  "Frozen/Meat 2",
+  "str001r01": "R1 Fruits",
+  "str001r02": "R2 Vegetables",
+  "str001r03": "R3 Cooking Essentials",
+  "str001r04": "R4 Grains and Pulses",
+  "str001r05": "R5 Snacks & Bakery",
+  "str001r06": "R6 Dairy & Beverages",
+  "str001r07": "R7 Frozen & Meat 2",
+  "str001r08": "R9 Personal Care",
+  "str001r09": "R10 Household Cleaning",
+  "str001r10": "R8 Frozen & Meat 1",
 };
 
 interface StoreRackDef {
@@ -33,16 +33,16 @@ interface StoreRackDef {
 }
 
 const STORE_RACKS: StoreRackDef[] = [
-  { rack_id:"str001r01", label:"Fruits",         color:"#d6b129", x:1,  y:1, w:1,  h:8, orientation:"vertical"   },
-  { rack_id:"str001r02", label:"Vegetables",      color:"#70c021", x:3,  y:1, w:1,  h:8, orientation:"vertical"   },
-  { rack_id:"str001r03", label:"Cooking",         color:"#FEE2E2", x:5,  y:4, w:15, h:1, orientation:"horizontal" },
-  { rack_id:"str001r04", label:"Grains",          color:"#439ecb", x:5,  y:2, w:15, h:1, orientation:"horizontal" },
-  { rack_id:"str001r05", label:"Snacks",          color:"#eebf58", x:5,  y:5, w:7,  h:1, orientation:"horizontal" },
-  { rack_id:"str001r06", label:"Dairy & Bev",     color:"#76c0f9", x:5,  y:7, w:7,  h:1, orientation:"horizontal" },
-  { rack_id:"str001r07", label:"Frozen/Meat",     color:"#75ffdd", x:13, y:7, w:7,  h:1, orientation:"horizontal" },
-  { rack_id:"str001r08", label:"Personal Care",   color:"#732edc", x:21, y:1, w:1,  h:8, orientation:"vertical"   },
-  { rack_id:"str001r09", label:"HH Cleaning",     color:"#c6b9b9", x:23, y:1, w:1,  h:8, orientation:"vertical"   },
-  { rack_id:"str001r10", label:"Frozen/Meat 2",   color:"#67fcfe", x:13, y:5, w:7,  h:1, orientation:"horizontal" },
+  { rack_id: "str001r01", label: "Fruits", color: "#d6b129", x: 1, y: 1, w: 1, h: 8, orientation: "vertical" },
+  { rack_id: "str001r02", label: "Vegetables", color: "#70c021", x: 3, y: 1, w: 1, h: 8, orientation: "vertical" },
+  { rack_id: "str001r03", label: "Cooking", color: "#FEE2E2", x: 5, y: 4, w: 15, h: 1, orientation: "horizontal" },
+  { rack_id: "str001r04", label: "Grains", color: "#439ecb", x: 5, y: 2, w: 15, h: 1, orientation: "horizontal" },
+  { rack_id: "str001r05", label: "Snacks", color: "#eebf58", x: 5, y: 5, w: 7, h: 1, orientation: "horizontal" },
+  { rack_id: "str001r06", label: "Dairy & Bev", color: "#76c0f9", x: 5, y: 7, w: 7, h: 1, orientation: "horizontal" },
+  { rack_id: "str001r07", label: "Frozen/Meat", color: "#75ffdd", x: 13, y: 7, w: 7, h: 1, orientation: "horizontal" },
+  { rack_id: "str001r08", label: "Personal Care", color: "#732edc", x: 21, y: 1, w: 1, h: 8, orientation: "vertical" },
+  { rack_id: "str001r09", label: "HH Cleaning", color: "#c6b9b9", x: 23, y: 1, w: 1, h: 8, orientation: "vertical" },
+  { rack_id: "str001r10", label: "Frozen/Meat 2", color: "#67fcfe", x: 13, y: 5, w: 7, h: 1, orientation: "horizontal" },
 ];
 
 const GRID_W = 25;
@@ -50,11 +50,11 @@ const GRID_H = 10;
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-interface ListItem   { name: string; bought: boolean; }
-interface CartItem   { item_id: string; name: string; weight_g: number; price: number; qty: number; added_at: string; confirmed: boolean; }
+interface ListItem { name: string; bought: boolean; }
+interface CartItem { item_id: string; name: string; weight_g: number; price: number; qty: number; added_at: string; confirmed: boolean; }
 
 interface BackendMatch {
-  item_id: string; name: string; rack_id: string; position_index: number;
+  item_id: string; name: string; rack_id: string; rack_name?: string; position_index: number;
   category_name: string; price?: number; unit_price_per_kg?: number;
   weight_type: string; weight_g?: number; label_variants: string[];
 }
@@ -65,7 +65,7 @@ interface CartDisplay {
   cart_id: string; store_id: string; status: string;
   items: CartItem[]; total_items: number; total_price: number; total_weight: number;
   user_list_items: ListItem[]; backend_matches: BackendMatch[];
-  optimized_path: { item_id:string; rack_id:string; position_index:number; pickup_point:{x:number;y:number}; }[];
+  optimized_path: { item_id: string; rack_id: string; position_index: number; pickup_point: { x: number; y: number }; }[];
   current_location?: CurrentLocation;
   list_name?: string; linked_list_id?: string; linked_user_id?: string;
 }
@@ -98,15 +98,15 @@ function bestMatch(query: string, matches: BackendMatch[]): BackendMatch | undef
 
   for (const bm of matches) {
     const variants = (bm.label_variants ?? []).map(v => v.toLowerCase().trim());
-    const bmName   = bm.name.toLowerCase();
+    const bmName = bm.name.toLowerCase();
     let score = -1;
     let matchedLen = Infinity;
 
     for (const v of variants) {
       let s = -1;
-      if (v === q)            s = 4;            // exact
+      if (v === q) s = 4;            // exact
       else if (v.startsWith(q) || q.startsWith(v)) s = 3;  // prefix
-      else if (v.includes(q) || q.includes(v))     s = 2;  // substring
+      else if (v.includes(q) || q.includes(v)) s = 2;  // substring
       if (s > score) { score = s; matchedLen = v.length; }
     }
     // Fallback: item name substring
@@ -119,9 +119,9 @@ function bestMatch(query: string, matches: BackendMatch[]): BackendMatch | undef
   return winScore >= 1 ? winner : undefined;
 }
 
-/** Rack badge label: "Fruits · 6" */
-function rackBadge(rackId: string, positionIndex?: number): string {
-  const name = RACK_NAME[rackId] ?? rackId;
+/** Rack badge label: uses rack_name from API if available, else RACK_NAME fallback */
+function rackBadge(rackId: string, positionIndex?: number, rackName?: string): string {
+  const name = rackName ?? RACK_NAME[rackId] ?? rackId;
   return positionIndex != null ? `${name} · ${positionIndex}` : name;
 }
 
@@ -146,8 +146,8 @@ const StoreMinimap = ({
   }
 
   const CELL = 22; // px per grid cell
-  const mapW  = GRID_W * CELL;
-  const mapH  = GRID_H * CELL;
+  const mapW = GRID_W * CELL;
+  const mapH = GRID_H * CELL;
 
   return (
     <div className="w-full">
@@ -159,19 +159,19 @@ const StoreMinimap = ({
         >
           {/* Entry zone */}
           <div className="absolute flex items-center justify-center text-[7px] font-bold text-slate-400 tracking-widest"
-            style={{ left:5*CELL, top:9*CELL, width:7*CELL, height:CELL, background:"#e0f2fe66" }}>
+            style={{ left: 5 * CELL, top: 9 * CELL, width: 7 * CELL, height: CELL, background: "#e0f2fe66" }}>
             ENTRY
           </div>
           {/* Billing zone */}
           <div className="absolute flex items-center justify-center text-[7px] font-bold text-slate-400 tracking-widest"
-            style={{ left:13*CELL, top:9*CELL, width:7*CELL, height:CELL, background:"#fef9c366" }}>
+            style={{ left: 13 * CELL, top: 9 * CELL, width: 7 * CELL, height: CELL, background: "#fef9c366" }}>
             BILLING
           </div>
 
           {/* Racks */}
           {STORE_RACKS.map(rack => {
-            const counts  = rackCounts.get(rack.rack_id);
-            const isNear  = nearbyRacks.includes(rack.rack_id);
+            const counts = rackCounts.get(rack.rack_id);
+            const isNear = nearbyRacks.includes(rack.rack_id);
             const hasPend = (counts?.pending ?? 0) > 0;
             const hasBought = (counts?.bought ?? 0) > 0;
 
@@ -181,9 +181,9 @@ const StoreMinimap = ({
                 title={`${rack.label} (${rack.rack_id})`}
                 className="absolute flex items-center justify-center overflow-hidden transition-all duration-400"
                 style={{
-                  left:   rack.x * CELL,
-                  top:    rack.y * CELL,
-                  width:  rack.w * CELL,
+                  left: rack.x * CELL,
+                  top: rack.y * CELL,
+                  width: rack.w * CELL,
                   height: rack.h * CELL,
                   background: isNear ? rack.color + "ee" : rack.color + "88",
                   border: `2px solid ${isNear ? rack.color : rack.color + "99"}`,
@@ -254,9 +254,9 @@ const StoreMinimap = ({
             <div
               className="absolute z-20 pointer-events-none"
               style={{
-                left:   cartLocation.x * CELL - 7,
-                top:    cartLocation.y * CELL - 7,
-                width:  14,
+                left: cartLocation.x * CELL - 7,
+                top: cartLocation.y * CELL - 7,
+                width: 14,
                 height: 14,
               }}
             >
@@ -269,10 +269,10 @@ const StoreMinimap = ({
 
       {/* Legend */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 px-1 text-[10px] text-slate-500">
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"/>To pick</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block"/>Picked</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block"/>You</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded border-2 border-blue-400 inline-block bg-blue-100"/>Nearby</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" />To pick</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block" />Picked</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block" />You</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded border-2 border-blue-400 inline-block bg-blue-100" />Nearby</span>
       </div>
     </div>
   );
@@ -297,11 +297,11 @@ const CheckoutModal = ({
 
         <div className="bg-gradient-to-r from-amber-400 to-orange-500 px-6 pt-6 pb-5 text-white relative">
           <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center">
-            <X className="h-4 w-4"/>
+            <X className="h-4 w-4" />
           </button>
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 bg-white/25 rounded-2xl flex items-center justify-center shrink-0">
-              <AlertCircle className="h-6 w-6"/>
+              <AlertCircle className="h-6 w-6" />
             </div>
             <div>
               <h2 className="text-lg font-bold">Review Your Cart</h2>
@@ -313,7 +313,7 @@ const CheckoutModal = ({
         <div className="px-5 py-4 space-y-4 max-h-[46vh] overflow-y-auto">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0"/>
+              <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
               <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">In Your Cart ({cartItems.length})</span>
             </div>
             <div className="space-y-1.5">
@@ -321,7 +321,7 @@ const CheckoutModal = ({
               {cartItems.map((item, i) => (
                 <div key={i} className="flex items-center justify-between bg-green-50 border border-green-200 rounded-xl px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-green-500 shrink-0"/>
+                    <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
                     <span className="font-semibold text-slate-800 text-sm">{item.name}</span>
                     <span className="text-xs text-slate-400">{item.weight_g}g</span>
                   </div>
@@ -334,14 +334,14 @@ const CheckoutModal = ({
           {pendingListItems.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <AlertCircle className="h-4 w-4 text-amber-500 shrink-0"/>
+                <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
                 <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Not Yet Scanned ({pendingListItems.length})</span>
               </div>
               <div className="space-y-1.5">
                 {pendingListItems.map((item, i) => (
                   <div key={i} className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
                     <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-amber-400 shrink-0"/>
+                      <div className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
                       <span className="text-sm text-slate-500 capitalize">{item.name}</span>
                     </div>
                     <span className="text-xs text-amber-600 font-semibold bg-amber-100 px-2 py-0.5 rounded-full">Not scanned</span>
@@ -366,7 +366,7 @@ const CheckoutModal = ({
           </button>
           <button onClick={onConfirm}
             className="flex-1 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg flex items-center justify-center gap-2 text-sm">
-            Confirm &amp; Pay <ArrowRight className="h-4 w-4"/>
+            Confirm &amp; Pay <ArrowRight className="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -380,15 +380,16 @@ const CheckoutModal = ({
 interface MainInterfaceProps { onBack: () => void; onCheckout: () => void; }
 
 export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
-  const [userId, setUserId]                   = useState<string | null>(null);
-  const [selectedListId, setSelectedListId]   = useState<string | null>(null);
-  const [showCart, setShowCart]               = useState(false);
-  const [showModal, setShowModal]             = useState(false);
-  const [cartDisplay, setCartDisplay]         = useState<CartDisplay | null>(null);
-  const [availableLists, setAvailableLists]   = useState<AvailableList[]>([]);
-  const [loadingLists, setLoadingLists]       = useState(false);
-  const [selectingList, setSelectingList]     = useState<string | null>(null);
-  const [error, setError]                     = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [selectedListId, setSelectedListId] = useState<string | null>(null);
+  const [pendingListId, setPendingListId] = useState<string | null>(null);
+  const [showCart, setShowCart] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [cartDisplay, setCartDisplay] = useState<CartDisplay | null>(null);
+  const [availableLists, setAvailableLists] = useState<AvailableList[]>([]);
+  const [loadingLists, setLoadingLists] = useState(false);
+  const [selectingList, setSelectingList] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // ── Read user_id from localStorage (set by LoginScreen)
@@ -432,7 +433,7 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
     if (!userId) return;
     setLoadingLists(true); setError(null);
     try {
-      const res  = await fetch(`${BASE_URL}/shopping-list/get/${userId}`);
+      const res = await fetch(`${BASE_URL}/shopping-list/get/${userId}`);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setAvailableLists((data.shopping_lists ?? []).filter((l: AvailableList) => l.status !== "completed"));
@@ -443,51 +444,49 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
 
   useEffect(() => { fetchLists(); }, [fetchLists]);
 
-  // ── Link list to cart
-  const handleSelectList = async (listId: string) => {
-    if (!userId) { setSelectedListId(listId); return; }
-    setSelectingList(listId); setError(null);
+  // ── Link list to cart (two-step: preview → confirm)
+  const handleSelectList = (listId: string) => {
+    // Just show the preview; do NOT call API yet
+    setPendingListId(listId);
+  };
+
+  const handleConfirmList = async () => {
+    if (!pendingListId || !userId) return;
+    setSelectingList(pendingListId); setError(null);
     try {
-      const res  = await fetch(`${BASE_URL}/shopping-list/select`, {
+      const res = await fetch(`${BASE_URL}/cart/confirm-list`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: userId, list_id: listId, cart_id: CART_ID }),
+        body: JSON.stringify({ user_id: userId, list_id: pendingListId, cart_id: CART_ID }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      setSelectedListId(listId); setShowCart(false);
+      setSelectedListId(pendingListId); setPendingListId(null); setShowCart(false);
       await pollCart();
     } catch (e: any) {
-      setError(e.message ?? "Failed to select list");
+      setError(e.message ?? "Failed to confirm list");
     } finally { setSelectingList(null); }
   };
 
-  // ── Checkout
+  // ── Checkout — just navigate to BillingScreen; actual /cart/checkout is called
+  // from PaymentScreen once the user has selected a payment method.
   const handleCheckout = async () => {
-    if (userId) {
-      try {
-        await fetch(`${BASE_URL}/cart/checkout`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cart_id: CART_ID, user_id: userId }),
-        });
-      } catch { /* ignore */ }
-    }
     setShowModal(false); onCheckout();
   };
 
   // ── Derived state from cartDisplay
-  const cartItems      = cartDisplay?.items ?? [];
-  const rawListItems   = cartDisplay?.user_list_items ?? [];
+  const cartItems = cartDisplay?.items ?? [];
+  const rawListItems = cartDisplay?.user_list_items ?? [];
   const backendMatches = cartDisplay?.backend_matches ?? [];
-  const pendingItems   = rawListItems.filter(i => !i.bought);
-  const totalAmount    = cartDisplay?.total_price  ?? 0;
-  const totalWeight    = cartDisplay?.total_weight ?? 0;
-  const nearbyRacks    = cartDisplay?.current_location?.nearby_racks ?? [];
-  const cartLocation   = cartDisplay?.current_location;
+  const pendingItems = rawListItems.filter(i => !i.bought);
+  const totalAmount = cartDisplay?.total_price ?? 0;
+  const totalWeight = cartDisplay?.total_weight ?? 0;
+  const nearbyRacks = cartDisplay?.current_location?.nearby_racks ?? [];
+  const cartLocation = cartDisplay?.current_location;
 
   // Enrich list items with matched rack info (uses scored bestMatch)
   const enrichedItems = rawListItems.map(li => {
     const bm = bestMatch(li.name, backendMatches);
-    return { ...li, rack_id: bm?.rack_id, position_index: bm?.position_index };
+    return { ...li, rack_id: bm?.rack_id, rack_name: bm?.rack_name, position_index: bm?.position_index };
   });
 
   return (
@@ -504,11 +503,11 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
           <div className="flex items-center justify-between mb-3">
             <Button variant="outline" size="sm" onClick={onBack}
               className="hover:bg-blue-100 border-blue-300 text-blue-700 font-semibold">
-              <Search className="h-4 w-4 mr-1"/>Search Items
+              <Search className="h-4 w-4 mr-1" />Search Items
             </Button>
           </div>
           <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center justify-center">
-            <MapPin className="h-4 w-4 mr-1 text-blue-600"/>STORE MAP
+            <MapPin className="h-4 w-4 mr-1 text-blue-600" />STORE MAP
           </h3>
           <div className="flex-1 bg-white rounded-xl shadow-lg p-3 overflow-auto">
             <StoreMinimap
@@ -526,60 +525,102 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
           {error && (
             <div className="mb-3 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-2 text-sm flex items-center justify-between">
               <span>{error}</span>
-              <button onClick={() => setError(null)}><X className="h-4 w-4"/></button>
+              <button onClick={() => setError(null)}><X className="h-4 w-4" /></button>
             </div>
           )}
 
           {!selectedListId ? (
-            /* ── View 1: List Selection ── */
+            /* ── View 1: List Selection (or Confirm step) ── */
             <div className="flex-1 bg-white rounded-3xl shadow-lg p-8 flex flex-col items-center justify-center overflow-auto">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-6">
-                <List className="h-8 w-8 text-blue-600"/>
-              </div>
-              <h2 className="text-3xl font-extrabold text-slate-800 mb-2">Your Shopping Lists</h2>
-              <p className="text-slate-500 mb-8">Select a list to start tracking items in the store</p>
 
-              {loadingLists ? (
-                <div className="flex items-center gap-2 text-slate-500">
-                  <Loader2 className="h-5 w-5 animate-spin"/>Loading your lists…
-                </div>
-              ) : !userId ? (
-                <div className="text-slate-400 text-center">
-                  <p className="mb-2">You're shopping as a guest.</p>
-                  <p className="text-sm">Scan the QR code to link your account and access your lists.</p>
-                </div>
-              ) : availableLists.length === 0 ? (
-                <div className="text-center">
-                  <p className="text-slate-400 mb-4">No shopping lists found.</p>
-                  <button onClick={fetchLists} className="flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm font-medium mx-auto">
-                    <RefreshCw className="h-4 w-4"/>Refresh
-                  </button>
-                </div>
-              ) : (
-                <div className="w-full max-w-lg space-y-4">
-                  {availableLists.map(list => (
-                    <button key={list.list_id} onClick={() => handleSelectList(list.list_id)}
-                      disabled={!!selectingList}
-                      className="w-full bg-slate-50 border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all duration-300 rounded-2xl p-5 flex items-center justify-between text-left group disabled:opacity-60">
-                      <div>
-                        <h3 className="text-xl font-bold text-slate-800 group-hover:text-blue-700 transition-colors">{list.list_name}</h3>
-                        <div className="flex items-center gap-3 mt-2 text-sm text-slate-500">
-                          <span className="flex items-center gap-1 bg-slate-200 px-2 py-0.5 rounded-md">
-                            <ShoppingCart className="h-3 w-3"/>{list.items?.length ?? 0} items
-                          </span>
+              {pendingListId ? (
+                /* ── Confirm step: preview the selected list before linking ── */
+                (() => {
+                  const selectedList = availableLists.find(l => l.list_id === pendingListId);
+                  return (
+                    <div className="w-full max-w-lg flex flex-col items-center">
+                      <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mb-4">
+                        <CheckCircle2 className="h-8 w-8 text-amber-500" />
+                      </div>
+                      <h2 className="text-2xl font-extrabold text-slate-800 mb-1">Confirm List Selection</h2>
+                      <p className="text-slate-500 mb-5 text-center text-sm">Once confirmed you cannot go back to change your list during this session.</p>
+                      <div className="w-full bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 mb-5">
+                        <h3 className="text-xl font-bold text-slate-800">{selectedList?.list_name ?? pendingListId}</h3>
+                        <p className="text-slate-500 mt-1 text-sm">{selectedList?.items?.length ?? 0} items</p>
+                        <div className="mt-3 space-y-1 max-h-40 overflow-y-auto">
+                          {(selectedList?.items ?? []).map((item: any, i: number) => (
+                            <div key={i} className="flex items-center gap-2 text-sm text-slate-600">
+                              <div className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+                              {typeof item === "string" ? item : item.name}
+                            </div>
+                          ))}
                         </div>
                       </div>
-                      <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-                        {selectingList === list.list_id
-                          ? <Loader2 className="h-5 w-5 text-blue-600 animate-spin"/>
-                          : <ArrowRight className="h-5 w-5 text-blue-600"/>}
+                      <div className="flex gap-3 w-full">
+                        <button onClick={() => setPendingListId(null)}
+                          className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold hover:bg-slate-100 transition-colors">
+                          ← Go Back
+                        </button>
+                        <button onClick={handleConfirmList} disabled={!!selectingList}
+                          className="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-bold hover:from-blue-600 hover:to-indigo-700 transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-60">
+                          {selectingList ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
+                          Confirm & Start Shopping
+                        </button>
                       </div>
-                    </button>
-                  ))}
-                  <button onClick={fetchLists} className="w-full flex items-center justify-center gap-2 text-slate-400 hover:text-slate-600 text-sm py-2">
-                    <RefreshCw className="h-4 w-4"/>Refresh Lists
-                  </button>
-                </div>
+                    </div>
+                  );
+                })()
+              ) : (
+                <>
+                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-6">
+                    <List className="h-8 w-8 text-blue-600" />
+                  </div>
+                  <h2 className="text-3xl font-extrabold text-slate-800 mb-2">Your Shopping Lists</h2>
+                  <p className="text-slate-500 mb-8">Select a list to start tracking items in the store</p>
+
+                  {loadingLists ? (
+                    <div className="flex items-center gap-2 text-slate-500">
+                      <Loader2 className="h-5 w-5 animate-spin" />Loading your lists…
+                    </div>
+                  ) : !userId ? (
+                    <div className="text-slate-400 text-center">
+                      <p className="mb-2">You're shopping as a guest.</p>
+                      <p className="text-sm">Scan the QR code to link your account and access your lists.</p>
+                    </div>
+                  ) : availableLists.length === 0 ? (
+                    <div className="text-center">
+                      <p className="text-slate-400 mb-4">No shopping lists found.</p>
+                      <button onClick={fetchLists} className="flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm font-medium mx-auto">
+                        <RefreshCw className="h-4 w-4" />Refresh
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-full max-w-lg space-y-4">
+                      {availableLists.map(list => (
+                        <button key={list.list_id} onClick={() => handleSelectList(list.list_id)}
+                          disabled={!!selectingList}
+                          className="w-full bg-slate-50 border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all duration-300 rounded-2xl p-5 flex items-center justify-between text-left group disabled:opacity-60">
+                          <div>
+                            <h3 className="text-xl font-bold text-slate-800 group-hover:text-blue-700 transition-colors">{list.list_name}</h3>
+                            <div className="flex items-center gap-3 mt-2 text-sm text-slate-500">
+                              <span className="flex items-center gap-1 bg-slate-200 px-2 py-0.5 rounded-md">
+                                <ShoppingCart className="h-3 w-3" />{list.items?.length ?? 0} items
+                              </span>
+                            </div>
+                          </div>
+                          <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                            {selectingList === list.list_id
+                              ? <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+                              : <ArrowRight className="h-5 w-5 text-blue-600" />}
+                          </div>
+                        </button>
+                      ))}
+                      <button onClick={fetchLists} className="w-full flex items-center justify-center gap-2 text-slate-400 hover:text-slate-600 text-sm py-2">
+                        <RefreshCw className="h-4 w-4" />Refresh Lists
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
@@ -589,21 +630,21 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
               <div className="flex items-center justify-between mb-6">
                 <button onClick={() => setSelectedListId(null)}
                   className="text-slate-500 hover:text-slate-800 flex items-center gap-1 font-medium bg-slate-100 px-3 py-2 rounded-lg hover:bg-slate-200 transition-colors">
-                  <ChevronLeft className="h-4 w-4"/>Back
+                  <ChevronLeft className="h-4 w-4" />Back
                 </button>
 
                 <div className="flex items-center justify-center gap-4">
                   <button onClick={() => setShowCart(false)}
                     className={cn("px-8 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2",
                       !showCart ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg scale-105"
-                               : "bg-slate-200 text-slate-600 hover:bg-slate-300")}>
-                    <List className="h-5 w-5"/>Shopping List
+                        : "bg-slate-200 text-slate-600 hover:bg-slate-300")}>
+                    <List className="h-5 w-5" />Shopping List
                   </button>
                   <button onClick={() => setShowCart(true)}
                     className={cn("px-8 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2",
-                      showCart  ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg scale-105"
-                               : "bg-slate-200 text-slate-600 hover:bg-slate-300")}>
-                    <ShoppingCart className="h-5 w-5"/>Cart ({cartItems.length})
+                      showCart ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg scale-105"
+                        : "bg-slate-200 text-slate-600 hover:bg-slate-300")}>
+                    <ShoppingCart className="h-5 w-5" />Cart ({cartItems.length})
                   </button>
                 </div>
 
@@ -619,11 +660,11 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
                   /* Cart Items */
                   <div className="space-y-3">
                     <h3 className="text-2xl font-bold text-slate-800 mb-4 flex items-center">
-                      <ShoppingCart className="mr-2 h-6 w-6 text-green-600"/>Cart Items
+                      <ShoppingCart className="mr-2 h-6 w-6 text-green-600" />Cart Items
                     </h3>
                     {cartItems.length === 0 ? (
                       <div className="text-center py-8 text-slate-400">
-                        <ShoppingCart className="h-12 w-12 mx-auto mb-3 opacity-30"/>
+                        <ShoppingCart className="h-12 w-12 mx-auto mb-3 opacity-30" />
                         <p>No items scanned yet.</p>
                         <p className="text-sm mt-1">Scan items to add them to your cart.</p>
                       </div>
@@ -644,11 +685,11 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
                   /* Shopping List */
                   <div className="space-y-3">
                     <h3 className="text-2xl font-bold text-slate-800 mb-4 flex items-center">
-                      <List className="mr-2 h-6 w-6 text-blue-600"/>Shopping List
+                      <List className="mr-2 h-6 w-6 text-blue-600" />Shopping List
                     </h3>
                     {enrichedItems.length === 0 ? (
                       <div className="text-center py-8 text-slate-400">
-                        <List className="h-12 w-12 mx-auto mb-3 opacity-30"/>
+                        <List className="h-12 w-12 mx-auto mb-3 opacity-30" />
                         <p>No items in this list.</p>
                       </div>
                     ) : enrichedItems.map((item, idx) => (
@@ -661,10 +702,10 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
                           <span className={cn("font-semibold text-slate-800 capitalize flex-1", item.bought && "line-through text-slate-400")}>
                             {item.name}
                           </span>
-                          {/* Rack badge — uses friendly name from RACK_NAME map */}
+                          {/* Rack badge — uses friendly name from API (rack_name) or RACK_NAME fallback */}
                           {item.rack_id && (
                             <span className="shrink-0 text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-semibold whitespace-nowrap">
-                              {rackBadge(item.rack_id, item.position_index)}
+                              {rackBadge(item.rack_id, item.position_index, item.rack_name)}
                             </span>
                           )}
                         </div>
@@ -685,14 +726,14 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
         {/* ── Right: Camera + Checkout ── */}
         <div className="w-1/4 p-6 flex flex-col gap-4 min-w-0">
           <div className="flex-1 bg-black rounded-2xl shadow-md overflow-hidden relative border-4 border-blue-200">
-            <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover"/>
+            <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover" />
             <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-2 z-10">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"/>SCAN CAMERA
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />SCAN CAMERA
             </div>
             <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-lg text-xs z-10">
               AI Detection Active
             </div>
-            <div className="absolute inset-x-0 h-[2px] bg-blue-400/30 shadow-[0_0_15px_rgba(96,165,250,0.5)] animate-[scan_3s_linear_infinite] z-20 pointer-events-none"/>
+            <div className="absolute inset-x-0 h-[2px] bg-blue-400/30 shadow-[0_0_15px_rgba(96,165,250,0.5)] animate-[scan_3s_linear_infinite] z-20 pointer-events-none" />
           </div>
 
           <div className="bg-white rounded-2xl shadow-lg p-6 space-y-4">
@@ -714,7 +755,7 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
             </div>
             <Button size="lg" onClick={() => setShowModal(true)}
               className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold text-lg shadow-lg">
-              <ShoppingCart className="mr-2 h-5 w-5"/>CHECKOUT
+              <ShoppingCart className="mr-2 h-5 w-5" />CHECKOUT
             </Button>
           </div>
         </div>

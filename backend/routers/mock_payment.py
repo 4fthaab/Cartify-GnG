@@ -22,7 +22,7 @@ def create_payment_session(payload: dict = Body(...)):
     Create a mock payment session for an order/cart.
     payload: {
       "order_id": "ORD123"          # optional, but recommended
-      "cart_id": "CART102"         # optional if order_id present
+      "cart_id": "CART103"         # optional if order_id present
       "amount": 145.50,
       "currency": "INR",           # default INR
       "return_url": "https://..."  # optional, frontend callback URL
@@ -161,6 +161,14 @@ def complete_payment(payload: dict):
         # Unlock cart for reuse
         if cart_id:
             unlock_cart(cart_id)
+            db["carts"].update_one(
+                {"cart_id": cart_id},
+                {"$unset": {
+                    "active_payment_id": "",
+                    "active_payment_amount": "",
+                    "pending_payment": ""
+                }}
+            )
 
         if user_id:
             db["users"].update_one(

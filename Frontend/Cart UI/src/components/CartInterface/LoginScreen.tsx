@@ -8,7 +8,7 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen = ({ onNext }: LoginScreenProps) => {
-  const [cartId] = useState("CART109");
+  const [cartId] = useState("CART103");
   const [storeId] = useState("STORE001");
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -37,7 +37,7 @@ export const LoginScreen = ({ onNext }: LoginScreenProps) => {
   }, []);
 
   const qrData = JSON.stringify({
-    cart_id: "CART109",
+    cart_id: "CART103",
     store_id: "STORE001"
   });
   return (
@@ -48,10 +48,10 @@ export const LoginScreen = ({ onNext }: LoginScreenProps) => {
         <div className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-accent/20 rounded-full blur-3xl animate-pulse delay-1000" />
       </div>
 
-      <div className="relative z-10 flex flex-col items-center text-center">
+      <div className="relative z-10 flex flex-col items-center gap-8 px-8 text-center">
         {/* Logo/Brand */}
         <div className="animate-scale-in">
-          <h1 className="text-4xl font-bold text-white mb-2">Cartify GnG</h1>
+          <h1 className="text-4xl font-bold text-white mb-2">ABC SUPERMARKET</h1>
           <p className="text-white/80 text-lg">Smart Shopping Experience</p>
         </div>
 
@@ -63,13 +63,13 @@ export const LoginScreen = ({ onNext }: LoginScreenProps) => {
             <div className="absolute w-80 h-80 bg-cyan-400/20 rounded-full blur-3xl"></div>
 
             {/* Main QR Card */}
-            <div className="relative bg-white/90 backdrop-blur-xl px-8 py-4 mb-2 rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.2)] border border-white/40 flex flex-col items-center">
+            <div className="relative bg-white/90 backdrop-blur-xl p-10 rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.2)] border border-white/40 flex flex-col items-center">
 
               <div className="p-4 bg-white rounded-2xl shadow-inner">
                 <QRCodeCanvas value={qrData} size={230} />
               </div>
 
-              <h3 className="mt-2 text-xl font-semibold text-slate-800">
+              <h3 className="mt-6 text-xl font-semibold text-slate-800">
                 Scan to Connect
               </h3>
 
@@ -77,8 +77,8 @@ export const LoginScreen = ({ onNext }: LoginScreenProps) => {
                 Cart ID: <span className="font-medium">{cartId}</span>
               </p>
 
-              Waiting Animation
-              <div className="flex items-center gap-2 mx-4 text-cyan-600 text-sm">
+              {/* Waiting Animation */}
+              <div className="flex items-center gap-2 mt-4 text-cyan-600 text-sm">
                 <span className="w-2 h-2 bg-cyan-500 rounded-full animate-ping"></span>
                 Waiting for mobile connection...
               </div>
