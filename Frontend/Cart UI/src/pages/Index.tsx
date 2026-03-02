@@ -17,7 +17,7 @@ const Index = () => {
   ];
 
   const screens = [
-    <LoginScreen onNext={() => setCurrentScreen(1)} />,
+    <LoginScreen onNext={() => setCurrentScreen(2)} />,
     <MinimapSearch
       onNext={() => setCurrentScreen(2)}
       onLogout={() => setCurrentScreen(0)}

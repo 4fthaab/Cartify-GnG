@@ -90,6 +90,28 @@ def cart_login(payload: dict):
         "user_id": user_id,
         "status": "in_use"
     }
+    
+@router.get("/status/{cart_id}")
+async def get_cart_status(cart_id: str):
+    db = get_db()
+
+    cart = db["carts"].find_one({"cart_id": cart_id})
+
+    if not cart:
+        return {"error": "Cart not found"}
+
+    # If cart not in use
+    if cart.get("status") != "in_use" or not cart.get("linked_user_id"):
+        return {"assigned": False}
+
+    return {
+        "assigned": True,
+        "user": {
+            "user_id": cart.get("linked_user_id"),
+            "session_id": cart.get("current_session", {}).get("session_id"),
+            "login_time": cart.get("current_session", {}).get("login_time")
+        }
+    }
 
 @router.get("/session/{cart_id}")
 def get_cart_session(cart_id: str):

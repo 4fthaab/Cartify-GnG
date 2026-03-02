@@ -10,6 +10,31 @@ interface LoginScreenProps {
 export const LoginScreen = ({ onNext }: LoginScreenProps) => {
   const [cartId] = useState("CART102");
   const [storeId] = useState("STORE001");
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(
+          `http://192.168.2.22:8000/cart/status/${cartId}`
+        );
+        const data = await res.json();
+
+        if (data.assigned) {
+          // Save to cart device localStorage
+          localStorage.setItem(
+            "cart_user",
+            JSON.stringify(data.user)
+          );
+
+          clearInterval(interval);
+          onNext(); // move to Minimap or MainInterface
+        }
+      } catch (err) {
+        console.error("Status check failed");
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const qrData = JSON.stringify({
     cart_id: "CART102",
