@@ -23,8 +23,6 @@ export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
   const savings = 2.5;
   const total = subtotal - savings;
 
-
-
   const [paymentMethod, setPaymentMethod] = useState<string | null>(null);
 
   return (

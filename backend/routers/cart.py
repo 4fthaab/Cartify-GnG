@@ -776,3 +776,36 @@ def cart_heartbeat(payload: dict):
         "message": "Heartbeat received",
         "cart_id": cart_id
     }
+    
+@router.get("/display/{cart_id}")
+def get_cart_display(cart_id: str):
+    """
+    Returns all data needed by the cart display frontend:
+    - Top-level items (scanned products), totals
+    - user_list_items (shopping list with bought status)
+    - backend_matches (for rack info)
+    - optimized_path
+    - current_location (for minimap)
+    - list_name, linked_list_id
+    """
+    db = get_db()
+    cart = db["carts"].find_one({"cart_id": cart_id})
+    if not cart:
+        raise HTTPException(status_code=404, detail="Cart not found")
+
+    return convert_objectid({
+        "cart_id": cart.get("cart_id"),
+        "store_id": cart.get("store_id"),
+        "status": cart.get("status"),
+        "items": cart.get("items", []),
+        "total_items": cart.get("total_items", 0),
+        "total_price": cart.get("total_price", 0),
+        "total_weight": cart.get("total_weight", 0),
+        "user_list_items": cart.get("user_list_items", []),
+        "backend_matches": cart.get("backend_matches", []),
+        "optimized_path": cart.get("optimized_path", []),
+        "current_location": cart.get("current_location"),
+        "list_name": cart.get("list_name"),
+        "linked_list_id": cart.get("linked_list_id"),
+        "linked_user_id": cart.get("linked_user_id"),
+    })

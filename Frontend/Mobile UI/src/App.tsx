@@ -15,8 +15,10 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<string>('home');
   const [cartItems, setCartItems] = useState(0);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [isCartLinked, setIsCartLinked] = useState(false);
-  const [showReportModal, setShowReportModal] = useState(false);
+  const [isCartLinked, setIsCartLinked] = useState<boolean>(() => {
+    // Check if a cart session exists in storage on initialization
+    return localStorage.getItem("cart_session") !== null;
+  }); const [showReportModal, setShowReportModal] = useState(false);
 
   // Restore session
   useEffect(() => {

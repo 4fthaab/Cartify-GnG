@@ -14,7 +14,7 @@ interface CartScreenProps {
 export function CartScreen({ onBack, isCartLinked, onCartLinked }: CartScreenProps) {
   const [isScanning, setIsScanning] = useState(!isCartLinked);
   const [isLinked, setIsLinked] = useState(isCartLinked);
-  
+
   // Checkout & Payment States
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
@@ -26,7 +26,7 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked }: CartScreenPro
 
   const loginScannerRef = useRef<Html5Qrcode | null>(null);
   const paymentScannerRef = useRef<Html5Qrcode | null>(null);
-  
+
   const user = JSON.parse(localStorage.getItem("user") || '{"user_id": "USR496713"}'); // Fallback for testing
 
   // ── 1. Cart Login Camera Scanning ───────────────────────────────
@@ -102,8 +102,8 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked }: CartScreenPro
         }
       };
 
-      fetchLiveCart(); 
-      const interval = setInterval(fetchLiveCart, 3000); 
+      fetchLiveCart();
+      const interval = setInterval(fetchLiveCart, 3000);
 
       return () => clearInterval(interval);
     }
@@ -111,7 +111,7 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked }: CartScreenPro
 
 
   // ── 3. Checkout & Mock Payment Flow ─────────────────────────────
-  
+
   // Start the payment camera once the checkout view is active
   useEffect(() => {
     if (isCheckingOut && !paymentDone) {
@@ -133,43 +133,19 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked }: CartScreenPro
     }
   }, [isCheckingOut, paymentDone]);
 
-  const handleCheckout = async () => {
-    setIsProcessingCheckout(true);
-    const session = JSON.parse(localStorage.getItem("cart_session") || "{}");
-    
-    try {
-      // 1. Initiate Checkout API (Locks cart, creates order, creates mock payment session)
-      const res = await fetch(`${API_BASE}/cart/checkout`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cart_id: session.cart_id, payment_method: "upi" })
-      });
-      
-      const data = await res.json();
-      
-      if (data.error) {
-        alert(data.error);
-        setIsProcessingCheckout(false);
-        return;
-      }
+  const handleCheckout = () => {
+    // Instead of calling the /cart/checkout API here, 
+    // we immediately navigate to the payment scanner view.
+    // The physical cart UI will handle the 'locking' of the cart.
+    setIsCheckingOut(true);
 
-      // 2. Transition to Payment Scanner View
-      setIsCheckingOut(true);
-      setIsProcessingCheckout(false);
-
-      const paymentId = data.payment_session?.payment_id;
-
-      // 3. Auto-simulate a successful payment scan after 3 seconds
-      if (paymentId) {
-        setTimeout(() => {
-          completePaymentMock(paymentId);
-        }, 3000);
-      }
-
-    } catch (err) {
-      console.error("Checkout failed", err);
-      setIsProcessingCheckout(false);
-    }
+    // Since we are bypassing the API response on mobile, 
+    // you may need to fetch the payment_id from your live cart polling 
+    // or a specific endpoint if the cart UI has already generated it.
+    // For the demo simulation:
+    setTimeout(() => {
+      completePaymentMock("DEMO_PAY_ID_123");
+    }, 4000);
   };
 
   const completePaymentMock = async (paymentId: string) => {
@@ -294,10 +270,10 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked }: CartScreenPro
 
               <div className="flex flex-col items-center gap-3 w-full">
                 <div className="flex items-center gap-2 mb-2 text-[#FF3347]">
-                   <Loader2 className="w-4 h-4 animate-spin" />
-                   <p className="text-sm font-medium">Awaiting payment scan...</p>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <p className="text-sm font-medium">Awaiting payment scan...</p>
                 </div>
-                
+
                 {/* Payment Camera View */}
                 <div className="relative w-full overflow-hidden rounded-3xl" style={{ height: "300px" }}>
                   <div id="payment-qr-reader" className="w-full h-full object-cover bg-gray-100" />
@@ -313,7 +289,7 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked }: CartScreenPro
               </div>
 
               <div className="w-full mt-auto">
-                 <p className="text-center text-xs text-muted-foreground">Demo will auto-complete in a few seconds...</p>
+                <p className="text-center text-xs text-muted-foreground">Demo will auto-complete in a few seconds...</p>
               </div>
             </>
           )}
@@ -333,12 +309,11 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked }: CartScreenPro
           </button>
           <div className="flex-1">
             <h2 className="font-semibold text-foreground">My Cart</h2>
-            <p className="text-xs text-muted-foreground">{cartItems.length} items in your cart</p>
           </div>
-          <div className="flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-full px-3 py-1">
+          {/* <div className="flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-full px-3 py-1">
             <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
             <span className="text-xs text-green-700 font-medium">Live Sync</span>
-          </div>
+          </div> */}
         </div>
 
         <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-2xl px-4 py-3">
@@ -387,21 +362,17 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked }: CartScreenPro
             <span>Subtotal ({cartItems.length} items)</span>
             <span>₹{cartSummary.total_price.toFixed(2)}</span>
           </div>
-          <div className="flex justify-between text-sm text-muted-foreground">
-            <span>Tax (8%)</span>
-            <span>₹{cartSummary.tax.toFixed(2)}</span>
-          </div>
           <div className="flex justify-between pt-2 border-t border-border">
             <span className="font-semibold text-foreground">Total</span>
-            <span className="text-xl font-semibold text-[#FF3347]">₹{(cartSummary.total_price + cartSummary.tax).toFixed(2)}</span>
+            <span className="text-xl font-semibold text-[#FF3347]">₹{(cartSummary.total_price).toFixed(2)}</span>
           </div>
         </div>
         <Button
           onClick={handleCheckout}
-          disabled={cartItems.length === 0 || isProcessingCheckout}
+          disabled={cartItems.length === 0}
           className="w-full bg-[#FF3347] hover:bg-[#FF5566] text-white rounded-xl h-12 text-base"
         >
-          {isProcessingCheckout ? <Loader2 className="w-5 h-5 animate-spin" /> : "Proceed to Checkout"}
+          Pay ₹{(cartSummary.total_price).toFixed(2)}
         </Button>
       </div>
     </div>
