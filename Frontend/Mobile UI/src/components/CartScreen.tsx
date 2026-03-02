@@ -3,7 +3,7 @@ import { Button } from './ui/button';
 import { useState, useEffect, useRef } from 'react';
 import { Html5Qrcode } from "html5-qrcode";
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = "http://192.168.2.22:8000";
 
 interface CartScreenProps {
   onBack: () => void;
@@ -245,11 +245,11 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked }: CartScreenPro
             </div>
           </div>
 
-          <div className="w-full space-y-3 mt-6">
+          {/* <div className="w-full space-y-3 mt-6">
             <Button onClick={() => processLogin("CART108", "STORE001")} className="w-full bg-secondary hover:bg-secondary/80 text-foreground rounded-xl h-12 text-base">
               Simulate Scan (CART108)
             </Button>
-          </div>
+          </div> */}
         </div>
       </div>
     );

@@ -1,7 +1,7 @@
 import { CheckCircle, AlertCircle } from "lucide-react";
 import { useState } from "react";
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = "http://192.168.2.22:8000";
 
 interface Props {
   onClose: () => void;

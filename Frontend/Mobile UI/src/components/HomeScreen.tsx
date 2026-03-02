@@ -13,7 +13,7 @@ interface HomeScreenProps {
   isCartLinked: boolean;
 }
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = "http://192.168.2.22:8000";
 
 export function HomeScreen({ onNavigate, cartItems, isDarkMode, onToggleTheme, isCartLinked }: HomeScreenProps) {
   const storedUser = JSON.parse(localStorage.getItem("user") || "null");

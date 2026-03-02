@@ -9,7 +9,7 @@ interface Props {
   onBack: () => void;
 }
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = "http://192.168.2.22:8000";
 
 export function PaymentHistoryScreen({ onBack }: Props) {
 
