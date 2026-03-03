@@ -1,4 +1,4 @@
-# routers/mock_payment.py
+# routers/mock_payment.py - FIXED VERSION
 from fastapi import APIRouter, Body
 from datetime import datetime
 import uuid
@@ -22,7 +22,7 @@ def create_payment_session(payload: dict = Body(...)):
     Create a mock payment session for an order/cart.
     payload: {
       "order_id": "ORD123"          # optional, but recommended
-      "cart_id": "CART103"         # optional if order_id present
+      "cart_id": "CART101"         # optional if order_id present
       "amount": 145.50,
       "currency": "INR",           # default INR
       "return_url": "https://..."  # optional, frontend callback URL
@@ -60,7 +60,7 @@ def create_payment_session(payload: dict = Body(...)):
         "cart_id": cart_id,
         "amount": amount,
         "currency": currency,
-        "status": "pending",   # pending / paid / failed
+        "status": "pending",   # pending / success / failed
         "created_at": datetime.utcnow().isoformat(),
         "return_url": return_url
     }
@@ -86,6 +86,16 @@ def payment_status(payment_id: str):
 
 @router.post("/complete")
 def complete_payment(payload: dict):
+    """
+    FIXED VERSION:
+    1. Update payment status
+    2. Update order status
+    3. Award loyalty points
+    4. Deduct stock
+    5. CLEAR cart items (now that payment is complete)
+    6. Unlock cart
+    7. Add receipt to user
+    """
     from utils.db import get_db
     from utils.cart_utils import unlock_cart
     from datetime import datetime
@@ -96,7 +106,6 @@ def complete_payment(payload: dict):
     method = payload.get("method", "upi")
     payer_ref = payload.get("payer_ref")
     
-
     if not payment_id:
         return {"error": "payment_id required"}
 
@@ -107,18 +116,19 @@ def complete_payment(payload: dict):
 
     order_id = payment_doc.get("order_id")
     order_doc = db["orders"].find_one({"order_id": order_id})
-    user_id = order_doc.get("user_id")
+    
     if not order_doc:
         return {"error": "Order not found for payment"}
-
-    cart_id = order_doc.get("cart_id")  # ✅ define before unlock_cart()
+    
+    user_id = order_doc.get("user_id")
+    cart_id = order_doc.get("cart_id")
 
     # Update mock payment status
     db["payments"].update_one(
         {"payment_id": payment_id},
         {"$set": {
             "status": status,
-            "user_id":user_id,
+            "user_id": user_id,
             "method": method,
             "payer_ref": payer_ref,
             "completed_at": datetime.utcnow().isoformat()
@@ -126,50 +136,64 @@ def complete_payment(payload: dict):
     )
 
     if status == "success":
-        # 1. Fetch the order first to get the total_price
-        order = db["orders"].find_one({"order_id": order_id})
-         # Add receipt to user's account
-        if order:
-            
-            # 2. Calculate points (2% of total price)
-            # Using .get() is safer in case total_price is missing
-            total_price = order.get("total_price", 0)
-            points_earned = int(total_price * 0.02)
+        # 1. Fetch the order to get total_price
+        total_price = order_doc.get("total_price", 0)
+        
+        # 2. Calculate points (2% of total price)
+        points_earned = int(total_price * 0.02)
 
-            # 3. Update the user's loyalty points
+        # 3. Update the user's loyalty points
+        if user_id:
             db["users"].update_one(
                 {"user_id": user_id},
                 {"$inc": {"loyalty_points": points_earned}}
             )
 
-            # 4. Update order status and payment details
-            db["orders"].update_one(
-                {"order_id": order_id},
-                {"$set": {
-                    "status": "completed",
-                    "payment_status": "paid",
-                    "payment_method": method,
-                    "paid_at": datetime.utcnow().isoformat(),
-                    "payer_ref": payer_ref,
-                    "points_awarded": points_earned # Good practice to track this
-                }}
-            )
-            
-        from services.inventory_updater import deduct_stock_after_payment
-        stock_result = deduct_stock_after_payment(order_doc)
+        # 4. Update order status and payment details
+        db["orders"].update_one(
+            {"order_id": order_id},
+            {"$set": {
+                "status": "completed",
+                "payment_status": "paid",
+                "payment_method": method,
+                "paid_at": datetime.utcnow().isoformat(),
+                "payer_ref": payer_ref,
+                "points_awarded": points_earned
+            }}
+        )
+        
+        # 5. Deduct stock
+        try:
+            from services.inventory_updater import deduct_stock_after_payment
+            stock_result = deduct_stock_after_payment(order_doc)
+        except Exception as e:
+            stock_result = {"error": str(e)}
 
-        # Unlock cart for reuse
+        # 6. NOW clear cart items and unlock (payment is complete)
         if cart_id:
-            unlock_cart(cart_id)
             db["carts"].update_one(
                 {"cart_id": cart_id},
-                {"$unset": {
-                    "active_payment_id": "",
-                    "active_payment_amount": "",
-                    "pending_payment": ""
-                }}
+                {
+                    "$set": {
+                        "items": [],
+                        "total_items": 0,
+                        "total_price": 0,
+                        "total_weight": 0,
+                        "status": "in_use",  # Keep in_use for user to continue shopping
+                        "pending_payment": False,
+                    },
+                    "$unset": {
+                        "active_payment_id": "",
+                        "active_payment_amount": "",
+                        "active_order_id": "",
+                        "checked_out": "",
+                        "checkout_time": "",
+                    }
+                }
             )
+            unlock_cart(cart_id)
 
+        # 7. Add receipt to user's account
         if user_id:
             db["users"].update_one(
                 {"user_id": user_id},
@@ -177,7 +201,7 @@ def complete_payment(payload: dict):
                     "receipts": {
                         "order_id": order_id,
                         "payment_id": payment_id,
-                        "amount": order_doc.get("total_price", 0),
+                        "amount": total_price,
                         "method": method,
                         "status": "paid",
                         "timestamp": datetime.utcnow().isoformat()
@@ -191,6 +215,7 @@ def complete_payment(payload: dict):
             "cart_id": cart_id,
             "payment_id": payment_id,
             "status": "paid",
+            "points_earned": points_earned,
             "stock_update": stock_result
         }
 
@@ -200,4 +225,25 @@ def complete_payment(payload: dict):
             {"order_id": order_id},
             {"$set": {"status": "payment_failed", "payment_status": "failed"}}
         )
+        
+        # Unlock cart but keep items so user can retry
+        if cart_id:
+            db["carts"].update_one(
+                {"cart_id": cart_id},
+                {
+                    "$set": {
+                        "status": "in_use",
+                        "pending_payment": False,
+                    },
+                    "$unset": {
+                        "active_payment_id": "",
+                        "active_payment_amount": "",
+                        "active_order_id": "",
+                        "checked_out": "",
+                        "checkout_time": "",
+                    }
+                }
+            )
+            unlock_cart(cart_id)
+        
         return {"message": "Payment failed", "order_id": order_id, "status": "failed"}

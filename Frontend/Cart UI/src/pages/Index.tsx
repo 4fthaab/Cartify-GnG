@@ -7,9 +7,18 @@ import { PaymentScreen } from "@/components/CartInterface/PaymentScreen";
 
 const INACTIVITY_MS = 60_000; // 1 minute
 
+// Add an interface for the new payment data structure
+interface PaymentData {
+  payment_id: string;
+  amount: number;
+  order_id: string;
+  qr_payload: string;
+}
+
 const Index = () => {
   const [currentScreen, setCurrentScreen] = useState(0);
-  const [paymentMethod, setPaymentMethod] = useState<"upi" | "cash">("upi");
+  // Update state to hold the full payment data object
+  const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
   const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Inactivity reset: only active on screens 3+ (after login / main interface)
@@ -63,36 +72,37 @@ const Index = () => {
           />
         </div>
 
-        {/* Screen 3 – Billing Screen (select payment method) */}
+        {/* Screen 3 – Billing Screen (creates payment session) */}
         <div className="min-w-full h-full">
           <BillingScreen
             onBack={() => goTo(2)}
-            onDone={(method) => {
-              setPaymentMethod(method);
-              if (method === "upi") {
-                goTo(4); // QR payment screen
-              } else {
-                // Cash: go directly to receipt (checkout API called from PaymentScreen)
-                // For cash we still go through PaymentScreen which handles the checkout call
-                goTo(4);
-              }
+            onDone={(data) => {
+              // Store the full payment data object
+              setPaymentData(data);
+              goTo(4);
             }}
           />
         </div>
 
-        {/* Screen 4 – Payment Screen (calls /cart/checkout, shows QR, polls status) */}
+        {/* Screen 4 – Payment Screen (shows QR, polls status) */}
         <div className="min-w-full h-full">
-          <PaymentScreen
-            paymentMethod={paymentMethod}
-            onBack={() => goTo(3)}
-            onDone={() => {
-              // Receipt shown inside PaymentScreen via ReceiptScreen component.
-              // After receipt → 1 min inactivity handled above, or user can reset manually.
-              // Navigate back to login after receipt is dismissed.
-              localStorage.removeItem("cart_user");
-              goTo(0);
-            }}
-          />
+          {paymentData ? (
+            <PaymentScreen
+              paymentData={paymentData}
+              onBack={() => goTo(3)}
+              onDone={() => {
+                // Navigate back to login after receipt is dismissed
+                localStorage.removeItem("cart_user");
+                setPaymentData(null); // Clear state securely
+                goTo(0);
+              }}
+            />
+          ) : (
+            // Fallback while transitioning or if data is missing
+            <div className="flex items-center justify-center h-full bg-slate-50">
+              <p className="text-slate-500 animate-pulse">Loading payment details...</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
