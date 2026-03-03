@@ -8,7 +8,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const BASE_URL = "http://192.168.2.22:8000";
-const CART_ID = "CART101";
+const CART_ID = "CART102";
 const POLL_MS = 2500;
 
 // ─── Store Layout (embedded from ST001.json) ───────────────────────────────────
@@ -295,7 +295,7 @@ const CheckoutModal = ({
         onClick={e => e.stopPropagation()}>
         <style>{`@keyframes mpop{from{opacity:0;transform:scale(.88) translateY(16px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
 
-        <div className="bg-gradient-to-r from-amber-400 to-orange-500 px-6 pt-6 pb-5 text-white relative">
+        <div className="bg-gradient-to-r from-amber-200 to-orange-300 px-6 pt-6 pb-5 relative">
           <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center">
             <X className="h-4 w-4" />
           </button>
@@ -305,7 +305,7 @@ const CheckoutModal = ({
             </div>
             <div>
               <h2 className="text-lg font-bold">Review Your Cart</h2>
-              <p className="text-amber-100 text-xs mt-0.5">Check items before proceeding to payment</p>
+              <p className="text-xs mt-0.5">Check items before proceeding to payment</p>
             </div>
           </div>
         </div>
@@ -583,18 +583,37 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
                       <Loader2 className="h-5 w-5 animate-spin" />Loading your lists…
                     </div>
                   ) : !userId ? (
-                    <div className="text-slate-400 text-center">
+                    /* Guest Mode */
+                    <div className="text-slate-400 text-center flex flex-col items-center">
                       <p className="mb-2">You're shopping as a guest.</p>
-                      <p className="text-sm">Scan the QR code to link your account and access your lists.</p>
-                    </div>
-                  ) : availableLists.length === 0 ? (
-                    <div className="text-center">
-                      <p className="text-slate-400 mb-4">No shopping lists found.</p>
-                      <button onClick={fetchLists} className="flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm font-medium mx-auto">
-                        <RefreshCw className="h-4 w-4" />Refresh
+                      <p className="text-sm mb-6">Scan the QR code to link your account and access your lists.</p>
+
+                      {/* Action for Guest to bypass list selection */}
+                      <button
+                        onClick={() => setSelectedListId('guest_session')}
+                        className="px-6 py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-900 transition-all flex items-center gap-2"
+                      >
+                        Continue without List <ArrowRight className="h-4 w-4" />
                       </button>
                     </div>
+                  ) : availableLists.length === 0 ? (
+                    /* User Logged In but No Lists found */
+                    <div className="text-center flex flex-col items-center">
+                      <p className="text-slate-400 mb-4">No shopping lists found.</p>
+                      <div className="flex flex-col gap-3">
+                        <button
+                          onClick={() => setSelectedListId('no_list_session')}
+                          className="px-6 py-3 bg-blue-50 text-blue-600 border border-blue-200 rounded-xl font-bold hover:bg-blue-100 transition-all"
+                        >
+                          Continue without List
+                        </button>
+                        <button onClick={fetchLists} className="flex items-center gap-2 text-slate-500 hover:text-slate-700 text-sm font-medium mx-auto">
+                          <RefreshCw className="h-4 w-4" />Refresh
+                        </button>
+                      </div>
+                    </div>
                   ) : (
+                    /* Lists are available - Only Show the Lists */
                     <div className="w-full max-w-lg space-y-4">
                       {availableLists.map(list => (
                         <button key={list.list_id} onClick={() => handleSelectList(list.list_id)}
@@ -744,7 +763,7 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-600">Weight</span>
-                <span className="font-semibold text-slate-800">{(totalWeight / 1000).toFixed(2)} kg</span>
+                <span className="font-semibold text-slate-800">{(totalWeight / 1000).toFixed(3)} kg</span>
               </div>
               <div className="border-t-2 border-slate-200 pt-2 mt-2">
                 <div className="flex justify-between items-center">

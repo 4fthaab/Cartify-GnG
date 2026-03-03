@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 
 const BASE_URL = "http://192.168.2.22:8000";
-const CART_ID = "CART101";
+const CART_ID = "CART102";
 
 interface BillingScreenProps {
   onBack: () => void;
@@ -92,9 +92,9 @@ export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-gradient-to-br from-slate-50 via-green-50 to-emerald-100 p-6">
+    <div className="h-screen w-screen flex flex-col bg-gradient-to-br from-slate-50 via-green-50 to-emerald-100 p-4 md:p-6">
       {/* Top Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex justify-between items-center mb-4 md:mb-6">
         <Button
           onClick={onBack}
           variant="ghost"
@@ -102,16 +102,15 @@ export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
           disabled={isProcessing}
         >
           <ArrowLeft className="h-5 w-5" />
-          Continue Shopping
+          <span className="hidden sm:inline">Continue Shopping</span>
         </Button>
 
         <div className="flex flex-col items-center">
-          <CheckCircle2 className="h-14 w-14 text-green-500 animate-bounce" />
-          <h1 className="text-2xl font-bold text-slate-800 mt-2">Checkout Summary</h1>
-          <p className="text-slate-600">Review your order and proceed to payment</p>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-800 mt-2">Checkout Summary</h1>
+          <p className="text-sm text-slate-600">Review your order and proceed</p>
         </div>
 
-        <div className="w-24"></div>
+        <div className="w-10 sm:w-24"></div>
       </div>
 
       {/* Error Message */}
@@ -122,30 +121,34 @@ export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
       )}
 
       {/* Billing Content */}
-      <div className="flex-1 flex justify-center overflow-hidden">
-        <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-3xl w-full flex flex-col">
+      {/* Added pb-4 to prevent cutting off at the bottom of the screen */}
+      <div className="flex-1 flex justify-center items-start w-full pb-8">
+        {/* Added items-start and overflow-y-auto to the wrapper to handle long content */}
+        <div className="bg-white rounded-3xl p-6 md:p-4 max-w-3xl w-full flex flex-col my-auto">
+
           {/* Bill Title */}
-          <div className="flex items-center gap-2 mb-4 border-b pb-4">
-            <Receipt className="h-6 w-6 text-green-500" />
-            <h2 className="text-2xl font-bold text-slate-800">Your Bill</h2>
+          <div className="flex items-center gap-2 mb-3 border-b pb-3">
+            <Receipt className="h-5 w-5 text-green-500" />
+            <h2 className="text-lg font-bold text-slate-800">Your Bill</h2>
           </div>
 
           {/* Scrollable Item List */}
-          <div className="flex-1 overflow-y-auto pr-2 mb-4 space-y-3">
+          {/* Added min-h-[150px] to guarantee space for 2-3 items */}
+          <div className="flex-1 overflow-y-auto pr-2 mb-4 space-y-3 min-h-[150px]">
             {cartItems.length === 0 ? (
               <div className="text-center py-8 text-slate-400">
-                <ShoppingCart className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                <ShoppingCart className="h-10 w-10 mx-auto mb-3 opacity-30" />
                 <p>No items in cart</p>
               </div>
             ) : (
               cartItems.map((item, idx) => (
                 <div
                   key={idx}
-                  className="flex justify-between border-b border-slate-100 pb-2 text-slate-700"
+                  className="flex justify-between border-b border-slate-100 pb-2 text-slate-700 text-sm md:text-base"
                 >
-                  <div>
-                    <span className="font-semibold">{item.name}</span>{" "}
-                    <span className="text-sm text-slate-500">({item.weight_g}g)</span>
+                  <div className="flex flex-col sm:flex-row sm:gap-1">
+                    <span className="font-semibold">{item.name}</span>
+                    <span className="text-xs sm:text-sm text-slate-500 mt-0.5 sm:mt-0">({item.weight_g}g)</span>
                   </div>
                   <div className="font-semibold">₹{item.price.toFixed(2)}</div>
                 </div>
@@ -154,43 +157,46 @@ export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
           </div>
 
           {/* Price Summary */}
-          <div className="space-y-2 text-sm text-slate-700 mb-6">
+          <div className="space-y-2 text-sm text-slate-700 mb-4">
             <div className="flex justify-between">
               <span>Subtotal</span>
               <span className="font-semibold">₹{subtotal.toFixed(2)}</span>
             </div>
-            <div className="border-t border-slate-200 pt-2 mt-2 flex justify-between text-lg font-bold text-slate-800">
+            <div className="border-t border-slate-200 pt-2 mt-2 flex justify-between text-base md:text-lg font-bold text-slate-800">
               <span>Total</span>
               <span>₹{total.toFixed(2)}</span>
             </div>
           </div>
 
           {/* Payment Options */}
-          <div className="mb-6">
-            <p className="font-semibold text-slate-800 mb-3">Select Payment Method</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Reduced bottom margin */}
+          <div className="mb-4">
+            <p className="font-semibold text-slate-800 text-sm mb-2">Select Payment Method</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3">
               <button
                 onClick={() => setPaymentMethod("upi")}
                 disabled={isProcessing}
-                className={`flex items-center gap-2 p-4 rounded-xl border-2 transition-all ${paymentMethod === "upi"
-                    ? "border-green-500 bg-green-50 shadow-md"
-                    : "border-slate-200 hover:border-green-300 hover:bg-slate-50"
+                // Reduced padding from p-4 to p-3, text size to text-sm
+                className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${paymentMethod === "upi"
+                  ? "border-green-500 bg-green-50 shadow-md"
+                  : "border-slate-200 hover:border-green-300 hover:bg-slate-50"
                   } ${isProcessing ? "opacity-50 cursor-not-allowed" : ""}`}
               >
-                <Wallet className="h-5 w-5 text-green-500" />
-                <span className="font-medium">UPI</span>
+                <Wallet className="h-4 w-4 text-green-500" />
+                <span className="font-medium text-sm">UPI</span>
               </button>
 
               <button
                 onClick={() => setPaymentMethod("cash")}
                 disabled={isProcessing}
-                className={`flex items-center gap-2 p-4 rounded-xl border-2 transition-all ${paymentMethod === "cash"
-                    ? "border-green-500 bg-green-50 shadow-md"
-                    : "border-slate-200 hover:border-green-300 hover:bg-slate-50"
+                // Reduced padding from p-4 to p-3, text size to text-sm
+                className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${paymentMethod === "cash"
+                  ? "border-green-500 bg-green-50 shadow-md"
+                  : "border-slate-200 hover:border-green-300 hover:bg-slate-50"
                   } ${isProcessing ? "opacity-50 cursor-not-allowed" : ""}`}
               >
-                <ShoppingCart className="h-5 w-5 text-green-500" />
-                <span className="font-medium">Pay at Counter</span>
+                <ShoppingCart className="h-4 w-4 text-green-500" />
+                <span className="font-medium text-sm">Pay at Counter</span>
               </button>
             </div>
           </div>
@@ -199,10 +205,10 @@ export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
           <Button
             onClick={handlePayNow}
             disabled={!paymentMethod || isProcessing}
-            size="lg"
-            className={`w-full font-bold text-lg shadow-lg ${paymentMethod && !isProcessing
-                ? "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white"
-                : "bg-slate-200 text-slate-400 cursor-not-allowed"
+            // Adjusted padding and text size slightly for better fit
+            className={`w-full font-bold text-base shadow-lg py-5 ${paymentMethod && !isProcessing
+              ? "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white"
+              : "bg-slate-200 text-slate-400 cursor-not-allowed"
               }`}
           >
             {isProcessing ? (

@@ -8,7 +8,7 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen = ({ onNext }: LoginScreenProps) => {
-  const [cartId] = useState("CART101");
+  const [cartId] = useState("CART102");
   const [storeId] = useState("STORE001");
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -37,7 +37,7 @@ export const LoginScreen = ({ onNext }: LoginScreenProps) => {
   }, []);
 
   const qrData = JSON.stringify({
-    cart_id: "CART101",
+    cart_id: "CART102",
     store_id: "STORE001"
   });
   return (

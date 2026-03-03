@@ -22,7 +22,7 @@ def create_payment_session(payload: dict = Body(...)):
     Create a mock payment session for an order/cart.
     payload: {
       "order_id": "ORD123"          # optional, but recommended
-      "cart_id": "CART101"         # optional if order_id present
+      "cart_id": "CART102"         # optional if order_id present
       "amount": 145.50,
       "currency": "INR",           # default INR
       "return_url": "https://..."  # optional, frontend callback URL

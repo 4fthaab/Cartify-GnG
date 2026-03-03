@@ -32,6 +32,14 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked 
 
   const user = JSON.parse(localStorage.getItem("user") || '{"user_id": "USR496713"}');
 
+  // Sync local state if parent unlinks the cart externally
+  useEffect(() => {
+    if (!isCartLinked) {
+      setIsLinked(false);
+      setIsScanning(true);
+    }
+  }, [isCartLinked]);
+
   // ── 1. Cart Login Camera Scanning ───────────────────────────────
   useEffect(() => {
     if (isScanning) {
@@ -204,6 +212,7 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked 
         setTimeout(() => {
           localStorage.removeItem("cart_session");
           setPaymentDone(false);
+          setIsScanning(true);
           setIsLinked(false);
           onCartUnlinked(); // tell parent to reset isCartLinked → false → back to homescreen
           onBack();
