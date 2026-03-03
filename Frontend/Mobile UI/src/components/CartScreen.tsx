@@ -1,4 +1,4 @@
-import { ArrowLeft, Scan, CheckCircle, ShoppingCart, Loader2 } from 'lucide-react';
+import { ArrowLeft, Scan, CheckCircle, ShoppingCart, Loader2, ScanLine } from 'lucide-react';
 import { Button } from './ui/button';
 import { useState, useEffect, useRef } from 'react';
 import { Html5Qrcode } from "html5-qrcode";
@@ -9,29 +9,32 @@ interface CartScreenProps {
   onBack: () => void;
   isCartLinked: boolean;
   onCartLinked: () => void;
+  onCartUnlinked: () => void;   // called after successful payment to reset homescreen
 }
 
-export function CartScreen({ onBack, isCartLinked, onCartLinked }: CartScreenProps) {
+export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked }: CartScreenProps) {
   const [isScanning, setIsScanning] = useState(!isCartLinked);
   const [isLinked, setIsLinked] = useState(isCartLinked);
-  
-  // Checkout & Payment States
-  const [isCheckingOut, setIsCheckingOut] = useState(false);
-  const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
+
+  // Payment flow states
+  const [paymentSession, setPaymentSession] = useState<{
+    pending: boolean; payment_id?: string; amount?: number; qr_payload?: string; order_id?: string;
+  } | null>(null);
+  const [isScanningPayment, setIsScanningPayment] = useState(false);
   const [paymentDone, setPaymentDone] = useState(false);
 
   // Live Cart Data States
   const [cartItems, setCartItems] = useState<any[]>([]);
-  const [cartSummary, setCartSummary] = useState({ total_price: 0, tax: 0 });
+  const [cartSummary, setCartSummary] = useState({ total_price: 0 });
 
-  const loginScannerRef = useRef<Html5Qrcode | null>(null);
+  const loginScannerRef   = useRef<Html5Qrcode | null>(null);
   const paymentScannerRef = useRef<Html5Qrcode | null>(null);
-  
-  const user = JSON.parse(localStorage.getItem("user") || '{"user_id": "USR496713"}'); // Fallback for testing
+
+  const user = JSON.parse(localStorage.getItem("user") || '{"user_id": "USR496713"}');
 
   // ── 1. Cart Login Camera Scanning ───────────────────────────────
   useEffect(() => {
-    if (isScanning && !isCheckingOut) {
+    if (isScanning) {
       const html5QrCode = new Html5Qrcode("qr-reader");
       loginScannerRef.current = html5QrCode;
 
@@ -47,16 +50,16 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked }: CartScreenPro
             console.error("Invalid QR format", err);
           }
         },
-        () => { /* Ignore read errors */ }
+        () => {}
       ).catch((err) => console.error("Camera failed to start", err));
 
       return () => {
-        if (loginScannerRef.current && loginScannerRef.current.isScanning) {
+        if (loginScannerRef.current?.isScanning) {
           loginScannerRef.current.stop().catch(console.error);
         }
       };
     }
-  }, [isScanning, isCheckingOut]);
+  }, [isScanning]);
 
   const processLogin = async (cart_id: string, store_id: string) => {
     try {
@@ -83,127 +86,135 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked }: CartScreenPro
 
   // ── 2. Live Cart Polling ────────────────────────────────────────
   useEffect(() => {
-    if (isLinked && !isCheckingOut) {
-      const session = JSON.parse(localStorage.getItem("cart_session") || "{}");
+    if (!isLinked || isScanningPayment || paymentDone) return;
 
-      const fetchLiveCart = async () => {
-        if (!session.cart_id) return;
+    const session = JSON.parse(localStorage.getItem("cart_session") || "{}");
+
+    const fetchLiveCart = async () => {
+      if (!session.cart_id) return;
+      try {
+        const res  = await fetch(`${API_BASE}/cart/view/${session.cart_id}`);
+        const data = await res.json();
+        if (!data.error) {
+          setCartItems(data.items || []);
+          setCartSummary({ total_price: data.total_price || 0 });
+        }
+      } catch (err) {
+        console.error("Failed to fetch live cart", err);
+      }
+    };
+
+    fetchLiveCart();
+    const interval = setInterval(fetchLiveCart, 3000);
+    return () => clearInterval(interval);
+  }, [isLinked, isScanningPayment, paymentDone]);
+
+  // ── 3. Poll for active payment session on cart ────────────────
+  // Only activates once cart is linked. When cart UI initiates checkout, this
+  // will detect a pending payment and enable the "Pay" button.
+  useEffect(() => {
+    if (!isLinked || paymentDone) return;
+
+    const session = JSON.parse(localStorage.getItem("cart_session") || "{}");
+    if (!session.cart_id) return;
+
+    const pollPaymentSession = async () => {
+      try {
+        const res  = await fetch(`${API_BASE}/cart/payment-session/${session.cart_id}`);
+        const data = await res.json();
+        setPaymentSession(data);
+      } catch { /* silent */ }
+    };
+
+    pollPaymentSession();
+    const interval = setInterval(pollPaymentSession, 3000);
+    return () => clearInterval(interval);
+  }, [isLinked, paymentDone]);
+
+  // ── 4. Payment QR Scanner — scan the QR shown on the cart screen
+  useEffect(() => {
+    if (!isScanningPayment) return;
+
+    const html5QrCode = new Html5Qrcode("payment-qr-reader");
+    paymentScannerRef.current = html5QrCode;
+
+    html5QrCode.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 250, height: 250 } },
+      async (decodedText) => {
         try {
-          const res = await fetch(`${API_BASE}/cart/view/${session.cart_id}`);
-          const data = await res.json();
+          await html5QrCode.stop();
+          // The QR payload is: mockpay://pay?payment_id=PAY_xxx&amount=...
+          // Extract payment_id from it
+          let payId = paymentSession?.payment_id;
+          try {
+            const url = new URL(decodedText);
+            const pid = url.searchParams.get("payment_id");
+            if (pid) payId = pid;
+          } catch {
+            // fallback: try to parse as known format
+            const match = decodedText.match(/payment_id=([^&]+)/);
+            if (match) payId = match[1];
+          }
 
-          if (!data.error) {
-            setCartItems(data.items || []);
-            const tax = (data.total_price || 0) * 0.08;
-            setCartSummary({ total_price: data.total_price || 0, tax });
+          if (payId) {
+            await completePayment(payId);
+          } else {
+            alert("Could not read payment ID from QR");
+            setIsScanningPayment(false);
           }
         } catch (err) {
-          console.error("Failed to fetch live cart", err);
+          console.error("QR scan error", err);
+          setIsScanningPayment(false);
         }
-      };
+      },
+      () => {}
+    ).catch((err) => {
+      console.error("Payment camera failed", err);
+      setIsScanningPayment(false);
+    });
 
-      fetchLiveCart(); 
-      const interval = setInterval(fetchLiveCart, 3000); 
-
-      return () => clearInterval(interval);
-    }
-  }, [isLinked, isCheckingOut]);
-
-
-  // ── 3. Checkout & Mock Payment Flow ─────────────────────────────
-  
-  // Start the payment camera once the checkout view is active
-  useEffect(() => {
-    if (isCheckingOut && !paymentDone) {
-      const html5QrCode = new Html5Qrcode("payment-qr-reader");
-      paymentScannerRef.current = html5QrCode;
-
-      html5QrCode.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        () => { /* We ignore actual scans here since it's an auto-mock */ },
-        () => { /* Ignore read errors */ }
-      ).catch((err) => console.error("Payment camera failed", err));
-
-      return () => {
-        if (paymentScannerRef.current && paymentScannerRef.current.isScanning) {
-          paymentScannerRef.current.stop().catch(console.error);
-        }
-      };
-    }
-  }, [isCheckingOut, paymentDone]);
-
-  const handleCheckout = async () => {
-    setIsProcessingCheckout(true);
-    const session = JSON.parse(localStorage.getItem("cart_session") || "{}");
-    
-    try {
-      // 1. Initiate Checkout API (Locks cart, creates order, creates mock payment session)
-      const res = await fetch(`${API_BASE}/cart/checkout`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cart_id: session.cart_id, payment_method: "upi" })
-      });
-      
-      const data = await res.json();
-      
-      if (data.error) {
-        alert(data.error);
-        setIsProcessingCheckout(false);
-        return;
+    return () => {
+      if (paymentScannerRef.current?.isScanning) {
+        paymentScannerRef.current.stop().catch(console.error);
       }
+    };
+  }, [isScanningPayment]);
 
-      // 2. Transition to Payment Scanner View
-      setIsCheckingOut(true);
-      setIsProcessingCheckout(false);
-
-      const paymentId = data.payment_session?.payment_id;
-
-      // 3. Auto-simulate a successful payment scan after 3 seconds
-      if (paymentId) {
-        setTimeout(() => {
-          completePaymentMock(paymentId);
-        }, 3000);
-      }
-
-    } catch (err) {
-      console.error("Checkout failed", err);
-      setIsProcessingCheckout(false);
-    }
-  };
-
-  const completePaymentMock = async (paymentId: string) => {
+  const completePayment = async (payId: string) => {
     try {
-      // Complete the mock payment to update DB records (Orders, Receipts, Loyalty Points)
-      await fetch(`${API_BASE}/mock-payment/complete`, {
+      const res = await fetch(`${API_BASE}/mock-payment/complete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          payment_id: paymentId,
+          payment_id: payId,
           status: "success",
           method: "upi",
-          payer_ref: "DEMO_AUTO_SCAN_123"
+          payer_ref: `MOBILE_SCAN_${Date.now()}`
         })
       });
+      const data = await res.json();
 
-      // Stop camera and show success screen
-      if (paymentScannerRef.current && paymentScannerRef.current.isScanning) {
-        await paymentScannerRef.current.stop();
+      if (data.message === "Payment successful" || data.status === "paid") {
+        setIsScanningPayment(false);
+        setPaymentDone(true);
+        setPaymentSession(null);
+
+        // Clear cart session and reset after 3 seconds
+        setTimeout(() => {
+          localStorage.removeItem("cart_session");
+          setPaymentDone(false);
+          setIsLinked(false);
+          onCartUnlinked(); // tell parent to reset isCartLinked → false → back to homescreen
+          onBack();
+        }, 3000);
+      } else {
+        alert("Payment failed. Please try again.");
+        setIsScanningPayment(false);
       }
-
-      setPaymentDone(true);
-
-      // Clean up UI and return to previous screen
-      setTimeout(() => {
-        setIsCheckingOut(false);
-        setPaymentDone(false);
-        setIsLinked(false);
-        localStorage.removeItem("cart_session"); // Clear session locally
-        onBack();
-      }, 2500);
-
     } catch (err) {
       console.error("Payment completion failed", err);
+      setIsScanningPayment(false);
     }
   };
 
@@ -244,85 +255,66 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked }: CartScreenPro
               </div>
             </div>
           </div>
-
-          {/* <div className="w-full space-y-3 mt-6">
-            <Button onClick={() => processLogin("CART108", "STORE001")} className="w-full bg-secondary hover:bg-secondary/80 text-foreground rounded-xl h-12 text-base">
-              Simulate Scan (CART108)
-            </Button>
-          </div> */}
         </div>
       </div>
     );
   }
 
-  if (isCheckingOut) {
-    const finalTotal = cartSummary.total_price + cartSummary.tax;
-
+  // ── Payment QR Scanning view ─────────────────────────────────────
+  if (isScanningPayment) {
     return (
       <div className="h-full w-full flex flex-col bg-background">
         <div className="flex items-center gap-4 px-6 py-4 border-b border-border shrink-0">
-          <button disabled={paymentDone} onClick={() => setIsCheckingOut(false)} className="w-10 h-10 bg-accent rounded-full flex items-center justify-center border border-border opacity-50">
+          <button onClick={() => setIsScanningPayment(false)}
+            className="w-10 h-10 bg-accent rounded-full flex items-center justify-center border border-border">
             <ArrowLeft className="w-5 h-5 text-foreground" />
           </button>
           <div>
-            <h2 className="text-base font-semibold text-foreground">Payment</h2>
-            <p className="text-xs text-muted-foreground">Scan to pay at the counter</p>
+            <h2 className="text-base font-semibold text-foreground">Scan Payment QR</h2>
+            <p className="text-xs text-muted-foreground">Point at the QR shown on the cart screen</p>
           </div>
         </div>
 
         <div className="flex-1 flex flex-col items-center justify-between px-6 py-8">
-          {paymentDone ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-center animate-in fade-in zoom-in duration-500">
-              <div className="w-full h-full rounded-full bg-green-100 flex items-center justify-center mb-5" style={{ height: "68%" }}>
-                <CheckCircle className="w-12 h-12 text-green-500" />
+          <div className="w-full bg-gradient-to-r from-[#FF3347] to-[#FF5566] rounded-2xl px-6 py-5 text-white mb-6">
+            <p className="text-sm text-white/80">Scanning payment for</p>
+            <p className="text-3xl font-bold mt-1">₹{paymentSession?.amount?.toFixed(2) ?? "..."}</p>
+          </div>
+
+          <div className="relative w-full overflow-hidden rounded-3xl" style={{ height: "300px" }}>
+            <div id="payment-qr-reader" className="w-full h-full object-cover bg-gray-100" />
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+              <div className="w-48 h-48 border-2 border-green-500/50 rounded-xl relative">
+                <div className="absolute top-0 left-0 w-6 h-6 border-t-[4px] border-l-[4px] border-green-500 rounded-tl-lg" />
+                <div className="absolute top-0 right-0 w-6 h-6 border-t-[4px] border-r-[4px] border-green-500 rounded-tr-lg" />
+                <div className="absolute bottom-0 left-0 w-6 h-6 border-b-[4px] border-l-[4px] border-green-500 rounded-bl-lg" />
+                <div className="absolute bottom-0 right-0 w-6 h-6 border-b-[4px] border-r-[4px] border-green-500 rounded-br-lg" />
               </div>
-              <h3 className="text-xl font-semibold text-foreground">Payment Successful!</h3>
-              <p className="text-sm text-muted-foreground mt-2">Points have been added to your loyalty account 🎉</p>
-              <p className="text-2xl font-bold text-[#FF3347] mt-4">₹{finalTotal.toFixed(2)}</p>
             </div>
-          ) : (
-            <>
-              <div className="w-full bg-gradient-to-r from-[#FF3347] to-[#FF5566] rounded-2xl px-6 py-5 text-white mb-6">
-                <p className="text-sm text-white/80">Total Amount Due</p>
-                <p className="text-3xl font-bold mt-1">₹{finalTotal.toFixed(2)}</p>
-                <div className="flex items-center gap-4 mt-3 text-sm text-white/80">
-                  <span>{cartItems.length} items</span>
-                  <span>·</span>
-                  <span>Cart ID: {JSON.parse(localStorage.getItem("cart_session") || "{}").cart_id}</span>
-                </div>
-              </div>
-
-              <div className="flex flex-col items-center gap-3 w-full">
-                <div className="flex items-center gap-2 mb-2 text-[#FF3347]">
-                   <Loader2 className="w-4 h-4 animate-spin" />
-                   <p className="text-sm font-medium">Awaiting payment scan...</p>
-                </div>
-                
-                {/* Payment Camera View */}
-                <div className="relative w-full overflow-hidden rounded-3xl" style={{ height: "300px" }}>
-                  <div id="payment-qr-reader" className="w-full h-full object-cover bg-gray-100" />
-                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                    <div className="w-48 h-48 border-2 border-green-500/50 rounded-xl relative">
-                      <div className="absolute top-0 left-0 w-6 h-6 border-t-[4px] border-l-[4px] border-green-500 rounded-tl-lg" />
-                      <div className="absolute top-0 right-0 w-6 h-6 border-t-[4px] border-r-[4px] border-green-500 rounded-tr-lg" />
-                      <div className="absolute bottom-0 left-0 w-6 h-6 border-b-[4px] border-l-[4px] border-green-500 rounded-bl-lg" />
-                      <div className="absolute bottom-0 right-0 w-6 h-6 border-b-[4px] border-r-[4px] border-green-500 rounded-br-lg" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="w-full mt-auto">
-                 <p className="text-center text-xs text-muted-foreground">Demo will auto-complete in a few seconds...</p>
-              </div>
-            </>
-          )}
+          </div>
+          <p className="text-center text-xs text-muted-foreground mt-4">Scan the QR code displayed on the cart screen to complete payment</p>
         </div>
+      </div>
+    );
+  }
+
+  // ── Payment success view ─────────────────────────────────────────
+  if (paymentDone) {
+    return (
+      <div className="h-full w-full flex flex-col items-center justify-center bg-background px-6 text-center animate-in fade-in zoom-in duration-500">
+        <div className="w-24 h-24 rounded-full bg-green-100 flex items-center justify-center mb-6">
+          <CheckCircle className="w-12 h-12 text-green-500" />
+        </div>
+        <h3 className="text-2xl font-bold text-foreground">Payment Successful!</h3>
+        <p className="text-sm text-muted-foreground mt-2">Loyalty points have been added to your account 🎉</p>
+        <p className="text-3xl font-bold text-[#FF3347] mt-4">₹{cartSummary.total_price.toFixed(2)}</p>
+        <p className="text-xs text-muted-foreground mt-6">Returning to home…</p>
       </div>
     );
   }
 
   const sessionData = JSON.parse(localStorage.getItem("cart_session") || "{}");
+  const hasPendingPayment = paymentSession?.pending === true;
 
   return (
     <div className="h-full w-full flex flex-col bg-background">
@@ -333,11 +325,6 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked }: CartScreenPro
           </button>
           <div className="flex-1">
             <h2 className="font-semibold text-foreground">My Cart</h2>
-            <p className="text-xs text-muted-foreground">{cartItems.length} items in your cart</p>
-          </div>
-          <div className="flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-full px-3 py-1">
-            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-xs text-green-700 font-medium">Live Sync</span>
           </div>
         </div>
 
@@ -387,22 +374,29 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked }: CartScreenPro
             <span>Subtotal ({cartItems.length} items)</span>
             <span>₹{cartSummary.total_price.toFixed(2)}</span>
           </div>
-          <div className="flex justify-between text-sm text-muted-foreground">
-            <span>Tax (8%)</span>
-            <span>₹{cartSummary.tax.toFixed(2)}</span>
-          </div>
           <div className="flex justify-between pt-2 border-t border-border">
             <span className="font-semibold text-foreground">Total</span>
-            <span className="text-xl font-semibold text-[#FF3347]">₹{(cartSummary.total_price + cartSummary.tax).toFixed(2)}</span>
+            <span className="text-xl font-semibold text-[#FF3347]">₹{cartSummary.total_price.toFixed(2)}</span>
           </div>
         </div>
-        <Button
-          onClick={handleCheckout}
-          disabled={cartItems.length === 0 || isProcessingCheckout}
-          className="w-full bg-[#FF3347] hover:bg-[#FF5566] text-white rounded-xl h-12 text-base"
-        >
-          {isProcessingCheckout ? <Loader2 className="w-5 h-5 animate-spin" /> : "Proceed to Checkout"}
-        </Button>
+
+        {/* Pay button — only shown when cart UI has initiated checkout and payment session exists */}
+        {hasPendingPayment ? (
+          <Button
+            onClick={() => setIsScanningPayment(true)}
+            className="w-full bg-[#FF3347] hover:bg-[#FF5566] text-white rounded-xl h-12 text-base flex items-center justify-center gap-2"
+          >
+            <ScanLine className="w-5 h-5" />
+            Pay ₹{paymentSession?.amount?.toFixed(2) ?? cartSummary.total_price.toFixed(2)}
+          </Button>
+        ) : (
+          <div className="w-full h-12 flex items-center justify-center bg-slate-100 rounded-xl text-slate-400 text-sm gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            {cartItems.length === 0
+              ? "Add items to your cart"
+              : "Waiting for checkout on cart screen…"}
+          </div>
+        )}
       </div>
     </div>
   );

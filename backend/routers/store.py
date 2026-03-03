@@ -19,3 +19,16 @@ def get_stores():
     for s in stores:
         s["_id"] = str(s["_id"])
     return {"stores": stores}
+
+@router.get("/layout/{store_id}")
+def get_store_layout(store_id: str):
+    """
+    Returns the store layout JSON (the ST001.json-style document) for a given store.
+    The layout document is stored in the store_layouts collection under the key store_id.
+    """
+    db = get_db()
+    layout = db["store_layouts"].find_one({"store_id": store_id}, {"_id": 0})
+    if not layout:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"Layout for store {store_id} not found")
+    return layout

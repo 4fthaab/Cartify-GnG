@@ -32,7 +32,7 @@ def cart_login(payload: dict):
     {
         "user_id": "USR496713",
         "store_id": "STORE001",
-        "cart_id": "CART103"
+        "cart_id": "CART101"
     }
     """
     db = get_db()
@@ -129,7 +129,7 @@ def cart_event(payload: dict):
     """
     Hardware sends atomic event:
     {
-        "cart_id": "CART102",
+        "cart_id": "CART101",
         "event_type": "add" | "remove",
         "detected_label": "Brush",
         "camera_confidence": 0.93,
@@ -426,66 +426,186 @@ async def marker_update(payload: dict):
 
     return {"message": "Location updated from marker"}
 
-@router.post("/checkout")
-def checkout_cart(payload: dict):
+@router.post("/confirm-list")
+def confirm_list(payload: dict):
     """
-    Finalize the cart:
-    - Lock it
-    - Create order
-    - Initiate mock payment
-    - Cleanup shopping list (forward unbought items)
-    
-    { "cart_id":"CART102", "payment_method":"upi" }
+    Two-step list linking. Cart UI previews the list first, then calls this
+    endpoint only when user taps Confirm. This prevents accidental early linking.
+    { "cart_id": "CART101", "user_id": "USR...", "list_id": "USR..._L..." }
     """
-    from utils.db import get_db
-    from utils.cart_utils import lock_cart
-    from datetime import datetime
-    import requests
-    from bson import ObjectId
-
+    from services.matcher import match_items
     db = get_db()
-    cart_id = payload.get("cart_id")
-    payment_method = payload.get("payment_method", "upi")
-    
-    # 🔥 1. Try to get user_id from the frontend payload first
-    user_id = payload.get("user_id")
-    if not cart_id:
-        return {"error": "cart_id required"}
+    cart_id  = payload.get("cart_id")
+    user_id  = payload.get("user_id")
+    list_id  = payload.get("list_id")
+
+    if not all([cart_id, user_id, list_id]):
+        return {"error": "cart_id, user_id, list_id required"}
+
+    sl = db["shopping_lists"].find_one({"user_id": user_id, "list_id": list_id})
+    if not sl:
+        return {"error": "Shopping list not found"}
 
     cart = db["carts"].find_one({"cart_id": cart_id})
+    store_id = cart.get("store_id") if cart else None
+
+    raw_items = sl.get("items", [])
+    item_names = [{"name": i["name"] if isinstance(i, dict) else i} for i in raw_items]
+    match_result = match_items(item_names, store_id) if store_id else {"matched_items": []}
+    backend_matches = match_result.get("matched_items", [])
+
+    # Fetch store layout to get friendly rack names
+    layout = db["store_layouts"].find_one({"store_id": store_id}, {"_id": 0}) if store_id else None
+    rack_name_map = {}
+    if layout:
+        for el in layout.get("elements", []):
+            if el.get("type") == "rack":
+                rack_name_map[el["rack_id"]] = el.get("name", el["rack_id"])
+
+    for bm in backend_matches:
+        rid = bm.get("rack_id")
+        if rid and rid in rack_name_map:
+            bm["rack_name"] = rack_name_map[rid]
+
+    user_list_items = []
+    for i in raw_items:
+        if isinstance(i, dict):
+            user_list_items.append({"name": i.get("name", ""), "bought": i.get("bought", False)})
+        else:
+            user_list_items.append({"name": str(i), "bought": False})
+
+    db["carts"].update_one(
+        {"cart_id": cart_id},
+        {"$set": {
+            "linked_list_id": list_id,
+            "linked_user_id": user_id,
+            "list_name": sl.get("list_name", "My List"),
+            "user_list_items": user_list_items,
+            "backend_matches": backend_matches,
+            "linked_at": datetime.utcnow().isoformat(),
+        }}
+    )
+    return {
+        "status": "linked",
+        "list_id": list_id,
+        "list_name": sl.get("list_name"),
+        "item_count": len(user_list_items),
+        "backend_matches": convert_objectid(backend_matches),
+    }
+
+
+@router.get("/payment-session/{cart_id}")
+def get_payment_session(cart_id: str):
+    """
+    Mobile app polls this after checkout is initiated on the cart UI.
+    Returns the active pending payment_id + amount + qr_payload so mobile can
+    display a Pay button and scan the QR shown on the cart screen.
+    """
+    db = get_db()
+    cart = db["carts"].find_one({"cart_id": cart_id}, {"_id": 0})
     if not cart:
         return {"error": "Cart not found"}
 
-    # 🔥 2. Fallback: Extract from current_session if payload didn't have it
+    payment_id = cart.get("active_payment_id")
+    if not payment_id:
+        return {"pending": False}
+
+    pay = db["payments"].find_one({"payment_id": payment_id}, {"_id": 0})
+    if not pay or pay.get("status") != "pending":
+        return {"pending": False}
+
+    return {
+        "pending": True,
+        "payment_id": payment_id,
+        "amount": pay.get("amount", 0),
+        "currency": pay.get("currency", "INR"),
+        "qr_payload": pay.get("qr_payload"),
+        "order_id": pay.get("order_id"),
+    }
+
+@router.get("/payment-session/{cart_id}")
+def get_payment_session(cart_id: str):
+    """
+    Mobile polls this endpoint to check if cart UI has initiated checkout.
+    Returns payment session info if checkout has been initiated.
+    """
+    db = get_db()
+    cart = db["carts"].find_one({"cart_id": cart_id})
+    
+    if not cart:
+        return {"error": "Cart not found"}
+    
+    # Check if there's an active payment session
+    active_payment_id = cart.get("active_payment_id")
+    
+    if not active_payment_id:
+        return {"pending": False}
+    
+    # Return payment session details
+    return {
+        "pending": True,
+        "payment_id": active_payment_id,
+        "amount": cart.get("active_payment_amount", 0),
+        "order_id": cart.get("active_order_id"),
+        "status": "awaiting_payment"
+    }
+
+@router.post("/checkout")
+def cart_checkout(payload: dict):
+    """
+    FIXED VERSION: 
+    1. Lock the cart and mark as checked_out
+    2. Create order with pending_payment status
+    3. Create payment session
+    4. Store payment info on cart BUT DO NOT CLEAR ITEMS
+    5. Items are only cleared AFTER successful payment
+    
+    Payload: {
+        "cart_id": "CART101",
+        "user_id": "USR496713",  # optional
+        "payment_method": "upi" | "cash"
+    }
+    """
+    import requests
+    db = get_db()
+    
+    cart_id = payload.get("cart_id")
+    user_id = payload.get("user_id")
+    payment_method = payload.get("payment_method", "upi")
+    
+    if not cart_id:
+        return {"error": "cart_id required"}
+    
+    cart = db["carts"].find_one({"cart_id": cart_id})
+    if not cart:
+        return {"error": "Cart not found"}
+    
+    # Fallback: Extract from current_session if payload didn't have it
     if not user_id:
         current_session = cart.get("current_session", {})
         user_id = current_session.get("user_id") or cart.get("linked_user_id")
-
+    
     # Lock the cart
     lock_cart(cart_id)
-
+    
     checkout_time = datetime.utcnow().isoformat()
     
-    # ✅ Correct update_one syntax: (Filter, Update)
+    # ✅ Mark as checked-out but KEEP items (we need them for payment amount)
     db["carts"].update_one(
-        {"cart_id": cart_id},  # Find the specific cart
+        {"cart_id": cart_id},
         {
             "$set": {
-                "checked_out": True, 
-                "checkout_time": checkout_time, 
-                "linked": False,
-                "items": [],           # 🧹 Clears the items list
-                "total_items": 0,      # 🧹 Resets count
-                "total_price": 0,      # 🧹 Resets price
-                "total_weight": 0      # 🧹 Resets weight
+                "status": "checked_out",  # Changed from "in_use"
+                "checked_out": True,
+                "checkout_time": checkout_time,
+                "pending_payment": True,
             }
         }
     )
-
-    # user_id = cart.get("linked_user_id")
+    
     store_id = cart.get("store_id")
     total_price = cart.get("total_price", 0)
-
+    
     # ✅ Create pending order
     order_id = f"ORD{int(datetime.utcnow().timestamp())}"
     order_doc = {
@@ -503,7 +623,7 @@ def checkout_cart(payload: dict):
         "payment_method": payment_method
     }
     db["orders"].insert_one(order_doc)
-
+    
     # ✅ Payment initiation
     try:
         payment_resp = requests.post(
@@ -514,12 +634,25 @@ def checkout_cart(payload: dict):
         payment_data = payment_resp.json()
     except Exception as e:
         payment_data = {"error": f"Payment initiation failed: {str(e)}"}
-
+    
+    # ✅ Store payment_id on cart for mobile to poll
+    # BUT DO NOT CLEAR ITEMS - they'll be cleared after payment success
+    active_payment_id = payment_data.get("payment_id")
+    db["carts"].update_one(
+        {"cart_id": cart_id},
+        {"$set": {
+            "active_payment_id": active_payment_id,
+            "active_payment_amount": total_price,
+            "active_order_id": order_id,
+        }}
+    )
+    
     # ✅ Handle shopping list forwarder
     linked_user_id = cart.get("linked_user_id")
     linked_list_id = cart.get("linked_list_id")
     next_list_id = None
     remaining_items = 0
+    
     if linked_user_id and linked_list_id:
         old_list = db["shopping_lists"].find_one({"user_id": linked_user_id, "list_id": linked_list_id})
         if old_list:
@@ -529,7 +662,7 @@ def checkout_cart(payload: dict):
             ]
             not_found = old_list.get("not_found", [])
             new_items = not_bought + not_found
-
+            
             timestamp = int(datetime.utcnow().timestamp())
             next_list_id = f"{linked_user_id}_L{timestamp}"
             new_list = {
@@ -542,12 +675,12 @@ def checkout_cart(payload: dict):
             }
             db["shopping_lists"].insert_one(new_list)
             remaining_items = len(new_items)
-
+            
             db["shopping_lists"].update_one(
                 {"user_id": linked_user_id, "list_id": linked_list_id},
                 {"$set": {"status": "completed", "archived_at": datetime.utcnow().isoformat()}}
             )
-
+    
     # ✅ Save receipt for reference
     receipt = {
         "cart_id": cart_id,
@@ -562,7 +695,7 @@ def checkout_cart(payload: dict):
         "remaining_items_next_list": remaining_items
     }
     db["receipts"].insert_one(receipt)
-
+    
     # ✅ Return unified result
     def clean(obj):
         if isinstance(obj, ObjectId):
@@ -572,7 +705,7 @@ def checkout_cart(payload: dict):
         elif isinstance(obj, dict):
             return {k: clean(v) for k, v in obj.items()}
         return obj
-
+    
     return {
         "message": "Checkout initiated. Proceed to payment.",
         "order_id": order_id,
@@ -589,6 +722,7 @@ def checkout_cart(payload: dict):
         },
         "receipt": clean(receipt)
     }
+
 
 @router.get("/receipt/{order_id}")
 def get_receipt(order_id: str):
@@ -614,7 +748,7 @@ def cart_logout(payload: dict):
     """
     Called after receipt printed / session timeout.
     Cleans cart and removes session data completely.
-    Payload: { "cart_id": "CART102" }
+    Payload: { "cart_id": "CART101" }
     """
     db = get_db()
     cart_id = payload.get("cart_id")
@@ -637,7 +771,14 @@ def cart_logout(payload: dict):
         "backend_matches": "",
         "linked_at": "",
         "list_name": "",
-        "optimized_path": ""
+        "optimized_path": "",
+        "current_session":"",
+        "current_location":"",
+        "checkout_initiated_at":"",
+        "checkout_stage":"",
+        "pending_payment":"",
+        "active_order_id":"",
+        "active_payment_id":""
     }
 
     # 🧩 Reset cart to available & unlocked, then unset old session data
@@ -776,3 +917,36 @@ def cart_heartbeat(payload: dict):
         "message": "Heartbeat received",
         "cart_id": cart_id
     }
+    
+@router.get("/display/{cart_id}")
+def get_cart_display(cart_id: str):
+    """
+    Returns all data needed by the cart display frontend:
+    - Top-level items (scanned products), totals
+    - user_list_items (shopping list with bought status)
+    - backend_matches (for rack info)
+    - optimized_path
+    - current_location (for minimap)
+    - list_name, linked_list_id
+    """
+    db = get_db()
+    cart = db["carts"].find_one({"cart_id": cart_id})
+    if not cart:
+        raise HTTPException(status_code=404, detail="Cart not found")
+
+    return convert_objectid({
+        "cart_id": cart.get("cart_id"),
+        "store_id": cart.get("store_id"),
+        "status": cart.get("status"),
+        "items": cart.get("items", []),
+        "total_items": cart.get("total_items", 0),
+        "total_price": cart.get("total_price", 0),
+        "total_weight": cart.get("total_weight", 0),
+        "user_list_items": cart.get("user_list_items", []),
+        "backend_matches": cart.get("backend_matches", []),
+        "optimized_path": cart.get("optimized_path", []),
+        "current_location": cart.get("current_location"),
+        "list_name": cart.get("list_name"),
+        "linked_list_id": cart.get("linked_list_id"),
+        "linked_user_id": cart.get("linked_user_id"),
+    })

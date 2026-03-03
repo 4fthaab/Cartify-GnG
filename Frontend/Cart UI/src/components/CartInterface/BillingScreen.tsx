@@ -1,31 +1,95 @@
-// BillingScreen.tsx
-import { ArrowLeft, CheckCircle2, CreditCard, Wallet, Receipt, ShoppingCart } from "lucide-react";
+// BillingScreen.tsx - FIXED VERSION with API Integration
+import { ArrowLeft, CheckCircle2, Wallet, Receipt, ShoppingCart, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+const BASE_URL = "http://192.168.2.22:8000";
+const CART_ID = "CART101";
 
 interface BillingScreenProps {
   onBack: () => void;
-  onDone: (method: "upi" | "cash") => void;
+  onDone: (paymentData: { payment_id: string; amount: number; order_id: string; qr_payload: string }) => void;
 }
 
-const purchasedItems = [
-  { name: "RICE", quantity: "10 Kg", price: 45 },
-  { name: "OIL", quantity: "2 Kg", price: 100 },
-  { name: "SHAMPOO", quantity: "1", price: 3 },
-  { name: "SOAP", quantity: "3", price: 9 },
-  { name: "APPLE", quantity: "1 Kg", price: 20 },
-  { name: "BANANA", quantity: "1 Kg", price: 10 },
-  { name: "BRINJAL", quantity: "500g", price: 2.5 },
-];
-
 export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
-  const subtotal = purchasedItems.reduce((sum, item) => sum + item.price, 0);
-  const savings = 2.5;
-  const total = subtotal - savings;
+  const [paymentMethod, setPaymentMethod] = useState<"upi" | "cash" | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
+  // Live cart data
+  const [cartItems, setCartItems] = useState<any[]>([]);
+  const [subtotal, setSubtotal] = useState(0);
+  const [total, setTotal] = useState(0);
 
+  // Fetch current cart items
+  useEffect(() => {
+    const fetchCart = async () => {
+      try {
+        const res = await fetch(`${BASE_URL}/cart/view/${CART_ID}`);
+        const data = await res.json();
+        if (!data.error) {
+          setCartItems(data.items || []);
+          setSubtotal(data.total_price || 0);
+          setTotal(data.total_price || 0);
+        }
+      } catch (err) {
+        console.error("Failed to fetch cart", err);
+      }
+    };
 
-  const [paymentMethod, setPaymentMethod] = useState<string | null>(null);
+    fetchCart();
+  }, []);
+
+  const handlePayNow = async () => {
+    if (!paymentMethod) return;
+
+    setIsProcessing(true);
+    setError(null);
+
+    try {
+      // Get user from localStorage
+      const raw = localStorage.getItem("cart_user");
+      const userId = raw ? JSON.parse(raw)?.user_id : null;
+
+      // Call /cart/checkout to initiate checkout and create payment session
+      const res = await fetch(`${BASE_URL}/cart/checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cart_id: CART_ID,
+          user_id: userId,
+          payment_method: paymentMethod,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.error) {
+        setError(data.error);
+        setIsProcessing(false);
+        return;
+      }
+
+      // Extract payment session data
+      const paymentSession = data.payment_session;
+
+      if (paymentSession?.payment_id) {
+        // Pass payment data to parent (goes to PaymentScreen)
+        onDone({
+          payment_id: paymentSession.payment_id,
+          amount: paymentSession.amount || data.order_summary?.total_price || 0,
+          order_id: data.order_id,
+          qr_payload: paymentSession.qr_payload || ""
+        });
+      } else {
+        setError("Failed to create payment session");
+        setIsProcessing(false);
+      }
+    } catch (err: any) {
+      setError(err.message || "Checkout failed");
+      setIsProcessing(false);
+    }
+  };
 
   return (
     <div className="h-screen w-screen flex flex-col bg-gradient-to-br from-slate-50 via-green-50 to-emerald-100 p-6">
@@ -35,6 +99,7 @@ export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
           onClick={onBack}
           variant="ghost"
           className="flex items-center gap-2 text-slate-600 hover:text-slate-800"
+          disabled={isProcessing}
         >
           <ArrowLeft className="h-5 w-5" />
           Continue Shopping
@@ -49,6 +114,13 @@ export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
         <div className="w-24"></div>
       </div>
 
+      {/* Error Message */}
+      {error && (
+        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">
+          {error}
+        </div>
+      )}
+
       {/* Billing Content */}
       <div className="flex-1 flex justify-center overflow-hidden">
         <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-3xl w-full flex flex-col">
@@ -60,33 +132,36 @@ export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
 
           {/* Scrollable Item List */}
           <div className="flex-1 overflow-y-auto pr-2 mb-4 space-y-3">
-            {purchasedItems.map((item, idx) => (
-              <div
-                key={idx}
-                className="flex justify-between border-b border-slate-100 pb-2 text-slate-700"
-              >
-                <div>
-                  <span className="font-semibold">{item.name}</span>{" "}
-                  <span className="text-sm text-slate-500">({item.quantity})</span>
-                </div>
-                <div className="font-semibold">${item.price.toFixed(2)}</div>
+            {cartItems.length === 0 ? (
+              <div className="text-center py-8 text-slate-400">
+                <ShoppingCart className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                <p>No items in cart</p>
               </div>
-            ))}
+            ) : (
+              cartItems.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="flex justify-between border-b border-slate-100 pb-2 text-slate-700"
+                >
+                  <div>
+                    <span className="font-semibold">{item.name}</span>{" "}
+                    <span className="text-sm text-slate-500">({item.weight_g}g)</span>
+                  </div>
+                  <div className="font-semibold">₹{item.price.toFixed(2)}</div>
+                </div>
+              ))
+            )}
           </div>
 
           {/* Price Summary */}
           <div className="space-y-2 text-sm text-slate-700 mb-6">
             <div className="flex justify-between">
               <span>Subtotal</span>
-              <span className="font-semibold">${subtotal.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-green-600">
-              <span>You Saved</span>
-              <span className="font-semibold">-${savings.toFixed(2)}</span>
+              <span className="font-semibold">₹{subtotal.toFixed(2)}</span>
             </div>
             <div className="border-t border-slate-200 pt-2 mt-2 flex justify-between text-lg font-bold text-slate-800">
               <span>Total</span>
-              <span>${total.toFixed(2)}</span>
+              <span>₹{total.toFixed(2)}</span>
             </div>
           </div>
 
@@ -96,10 +171,11 @@ export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <button
                 onClick={() => setPaymentMethod("upi")}
+                disabled={isProcessing}
                 className={`flex items-center gap-2 p-4 rounded-xl border-2 transition-all ${paymentMethod === "upi"
-                  ? "border-green-500 bg-green-50 shadow-md"
-                  : "border-slate-200 hover:border-green-300 hover:bg-slate-50"
-                  }`}
+                    ? "border-green-500 bg-green-50 shadow-md"
+                    : "border-slate-200 hover:border-green-300 hover:bg-slate-50"
+                  } ${isProcessing ? "opacity-50 cursor-not-allowed" : ""}`}
               >
                 <Wallet className="h-5 w-5 text-green-500" />
                 <span className="font-medium">UPI</span>
@@ -107,10 +183,11 @@ export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
 
               <button
                 onClick={() => setPaymentMethod("cash")}
+                disabled={isProcessing}
                 className={`flex items-center gap-2 p-4 rounded-xl border-2 transition-all ${paymentMethod === "cash"
-                  ? "border-green-500 bg-green-50 shadow-md"
-                  : "border-slate-200 hover:border-green-300 hover:bg-slate-50"
-                  }`}
+                    ? "border-green-500 bg-green-50 shadow-md"
+                    : "border-slate-200 hover:border-green-300 hover:bg-slate-50"
+                  } ${isProcessing ? "opacity-50 cursor-not-allowed" : ""}`}
               >
                 <ShoppingCart className="h-5 w-5 text-green-500" />
                 <span className="font-medium">Pay at Counter</span>
@@ -120,22 +197,22 @@ export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
 
           {/* Final Confirm */}
           <Button
-            onClick={() => {
-              if (paymentMethod === "upi") {
-                onDone("upi");   // ✅ correct
-              } else if (paymentMethod === "cash") {
-                onDone("cash");  // ✅ correct
-              }
-
-            }}
-            disabled={!paymentMethod}
+            onClick={handlePayNow}
+            disabled={!paymentMethod || isProcessing}
             size="lg"
-            className={`w-full font-bold text-lg shadow-lg ${paymentMethod
-              ? "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white"
-              : "bg-slate-200 text-slate-400 cursor-not-allowed"
+            className={`w-full font-bold text-lg shadow-lg ${paymentMethod && !isProcessing
+                ? "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white"
+                : "bg-slate-200 text-slate-400 cursor-not-allowed"
               }`}
           >
-            Pay Now
+            {isProcessing ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                Processing...
+              </>
+            ) : (
+              "Pay Now"
+            )}
           </Button>
         </div>
       </div>
