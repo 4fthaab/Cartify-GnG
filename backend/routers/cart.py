@@ -32,7 +32,7 @@ def cart_login(payload: dict):
     {
         "user_id": "USR496713",
         "store_id": "STORE001",
-        "cart_id": "CART102"
+        "cart_id": "CART103"
     }
     """
     db = get_db()
@@ -129,7 +129,7 @@ def cart_event(payload: dict):
     """
     Hardware sends atomic event:
     {
-        "cart_id": "CART102",
+        "cart_id": "CART103",
         "event_type": "add" | "remove",
         "detected_label": "Brush",
         "camera_confidence": 0.93,
@@ -431,7 +431,7 @@ def confirm_list(payload: dict):
     """
     Two-step list linking. Cart UI previews the list first, then calls this
     endpoint only when user taps Confirm. This prevents accidental early linking.
-    { "cart_id": "CART102", "user_id": "USR...", "list_id": "USR..._L..." }
+    { "cart_id": "CART103", "user_id": "USR...", "list_id": "USR..._L..." }
     """
     from services.matcher import match_items
     db = get_db()
@@ -561,7 +561,7 @@ def cart_checkout(payload: dict):
     5. Items are only cleared AFTER successful payment
     
     Payload: {
-        "cart_id": "CART102",
+        "cart_id": "CART103",
         "user_id": "USR496713",  # optional
         "payment_method": "upi" | "cash"
     }
@@ -748,7 +748,7 @@ def cart_logout(payload: dict):
     """
     Called after receipt printed / session timeout.
     Cleans cart and removes session data completely.
-    Payload: { "cart_id": "CART102" }
+    Payload: { "cart_id": "CART103" }
     """
     db = get_db()
     cart_id = payload.get("cart_id")

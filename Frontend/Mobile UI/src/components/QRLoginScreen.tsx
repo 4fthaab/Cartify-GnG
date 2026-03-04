@@ -3,7 +3,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { useState } from 'react';
 
-const API_BASE = "http://192.168.2.22:8000";
+const API_BASE = "http://10.152.93.220:8000";
 
 interface QRLoginScreenProps {
   onLogin: (user: any) => void;
@@ -91,7 +91,7 @@ export function QRLoginScreen({ onLogin }: QRLoginScreenProps) {
         <div className="w-24 h-24 bg-[#FF3347] rounded-2xl flex items-center justify-center mb-4">
           <span className="text-white text-4xl">🛒</span>
         </div>
-        
+
         <h2 className="text-2xl text-center text-foreground">
           {isLogin ? 'Welcome Back!' : 'Create Account'}
         </h2>

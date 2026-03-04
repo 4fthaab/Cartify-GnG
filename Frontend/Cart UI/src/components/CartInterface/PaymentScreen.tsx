@@ -5,7 +5,7 @@ import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ReceiptScreen } from "./ReceiptScreen";
 
-const BASE_URL = "http://192.168.2.22:8000";
+const BASE_URL = "http://10.152.93.220:8000";
 
 interface PaymentScreenProps {
   paymentData: {
@@ -35,7 +35,7 @@ export const PaymentScreen = ({ paymentData, onBack, onDone }: PaymentScreenProp
 
         if (data.status === "success" || data.status === "paid") {
           clearInterval(pollRef.current!);
-          
+
           // Fetch order items for receipt
           try {
             const oRes = await fetch(`${BASE_URL}/cart/receipt/${paymentData.order_id}`);
@@ -44,7 +44,7 @@ export const PaymentScreen = ({ paymentData, onBack, onDone }: PaymentScreenProp
           } catch {
             /* silent */
           }
-          
+
           setPhase("success");
         } else if (data.status === "failed") {
           clearInterval(pollRef.current!);

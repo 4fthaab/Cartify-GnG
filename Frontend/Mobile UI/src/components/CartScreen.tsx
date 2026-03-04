@@ -3,7 +3,7 @@ import { Button } from './ui/button';
 import { useState, useEffect, useRef } from 'react';
 import { Html5Qrcode } from "html5-qrcode";
 
-const API_BASE = "http://192.168.2.22:8000";
+const API_BASE = "http://10.152.93.220:8000";
 
 interface CartScreenProps {
   onBack: () => void;
@@ -27,7 +27,7 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked 
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [cartSummary, setCartSummary] = useState({ total_price: 0 });
 
-  const loginScannerRef   = useRef<Html5Qrcode | null>(null);
+  const loginScannerRef = useRef<Html5Qrcode | null>(null);
   const paymentScannerRef = useRef<Html5Qrcode | null>(null);
 
   const user = JSON.parse(localStorage.getItem("user") || '{"user_id": "USR496713"}');
@@ -58,7 +58,7 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked 
             console.error("Invalid QR format", err);
           }
         },
-        () => {}
+        () => { }
       ).catch((err) => console.error("Camera failed to start", err));
 
       return () => {
@@ -101,7 +101,7 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked 
     const fetchLiveCart = async () => {
       if (!session.cart_id) return;
       try {
-        const res  = await fetch(`${API_BASE}/cart/view/${session.cart_id}`);
+        const res = await fetch(`${API_BASE}/cart/view/${session.cart_id}`);
         const data = await res.json();
         if (!data.error) {
           setCartItems(data.items || []);
@@ -128,7 +128,7 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked 
 
     const pollPaymentSession = async () => {
       try {
-        const res  = await fetch(`${API_BASE}/cart/payment-session/${session.cart_id}`);
+        const res = await fetch(`${API_BASE}/cart/payment-session/${session.cart_id}`);
         const data = await res.json();
         setPaymentSession(data);
       } catch { /* silent */ }
@@ -176,7 +176,7 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked 
           setIsScanningPayment(false);
         }
       },
-      () => {}
+      () => { }
     ).catch((err) => {
       console.error("Payment camera failed", err);
       setIsScanningPayment(false);
@@ -214,7 +214,7 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked 
           setPaymentDone(false);
           setIsScanning(true);
           setIsLinked(false);
-          onCartUnlinked(); // tell parent to reset isCartLinked → false → back to homescreen
+          // onCartUnlinked(); // tell parent to reset isCartLinked → false → back to homescreen
           onBack();
         }, 3000);
       } else {

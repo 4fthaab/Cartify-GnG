@@ -3,8 +3,8 @@ import { ArrowLeft, CheckCircle2, Wallet, Receipt, ShoppingCart, Loader2 } from 
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 
-const BASE_URL = "http://192.168.2.22:8000";
-const CART_ID = "CART102";
+const BASE_URL = "http://10.152.93.220:8000";
+const CART_ID = "CART103";
 
 interface BillingScreenProps {
   onBack: () => void;

@@ -8,7 +8,7 @@ interface OffersScreenProps {
   onBack: () => void;
 }
 
-const API_BASE = "http://192.168.2.22:8000";
+const API_BASE = "http://10.152.93.220:8000";
 
 export function OffersScreen({ onBack }: OffersScreenProps) {
 

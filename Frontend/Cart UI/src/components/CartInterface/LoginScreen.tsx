@@ -8,13 +8,13 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen = ({ onNext }: LoginScreenProps) => {
-  const [cartId] = useState("CART102");
+  const [cartId] = useState("CART103");
   const [storeId] = useState("STORE001");
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
         const res = await fetch(
-          `http://192.168.2.22:8000/cart/status/${cartId}`
+          `http://10.152.93.220:8000/cart/status/${cartId}`
         );
         const data = await res.json();
 
@@ -37,7 +37,7 @@ export const LoginScreen = ({ onNext }: LoginScreenProps) => {
   }, []);
 
   const qrData = JSON.stringify({
-    cart_id: "CART102",
+    cart_id: "CART103",
     store_id: "STORE001"
   });
   return (

@@ -172,7 +172,7 @@ def submit_rating(data: dict):
     {
       "user_id": "USR123",
       "target_type": "app | cart | supermarket",
-      "target_id": "CART102 | STORE001 | null",  // null for app
+      "target_id": "CART103 | STORE001 | null",  // null for app
       "rating": 4,                                 // 1-5
       "review": "Great experience!"
     }

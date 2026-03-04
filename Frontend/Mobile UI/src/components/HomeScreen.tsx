@@ -13,7 +13,7 @@ interface HomeScreenProps {
   isCartLinked: boolean;
 }
 
-const API_BASE = "http://192.168.2.22:8000";
+const API_BASE = "http://10.152.93.220:8000";
 
 export function HomeScreen({ onNavigate, cartItems, isDarkMode, onToggleTheme, isCartLinked }: HomeScreenProps) {
   const storedUser = JSON.parse(localStorage.getItem("user") || "null");
@@ -62,6 +62,17 @@ export function HomeScreen({ onNavigate, cartItems, isDarkMode, onToggleTheme, i
         console.error("Failed to logout cart on backend", err);
       }
     }
+    else {
+      try {
+        await fetch(`${API_BASE}/cart/logout`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cart_id: cartSession.cart_id }) //
+        });
+      } catch (err) {
+        console.error("Failed to logout cart on backend", err);
+      }
+    }
 
     // 2. Clear local storage to reset user state
     localStorage.removeItem("user");
@@ -71,7 +82,7 @@ export function HomeScreen({ onNavigate, cartItems, isDarkMode, onToggleTheme, i
     // This will show the "Cartify" intro animation again
     onNavigate('splash');
   };
-  
+
   const quickActions = [
     { icon: ListChecks, label: 'Shopping List', screen: 'list' },
     { icon: ShoppingCart, label: 'My Cart', screen: 'cart', badge: cartItems },

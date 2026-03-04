@@ -8,7 +8,7 @@ interface ShoppingListScreenProps {
   onBack: () => void;
 }
 
-const API_BASE = "http://192.168.2.22:8000";
+const API_BASE = "http://10.152.93.220:8000";
 
 export function ShoppingListScreen({ onBack }: ShoppingListScreenProps) {
 
@@ -126,12 +126,12 @@ export function ShoppingListScreen({ onBack }: ShoppingListScreenProps) {
         setLists(data.shopping_lists);
 
         // Find the currently selected list in the fresh data and keep it selected
-        setSelectedList((prevSelected:any) => {
+        setSelectedList((prevSelected: any) => {
           if (!prevSelected) return null; // If no list was selected, stay on "All Lists"
 
           // Find the updated version of the active list
           const updatedList = data.shopping_lists.find(
-            (list:any) => list.list_id === prevSelected.list_id
+            (list: any) => list.list_id === prevSelected.list_id
           );
 
           return updatedList || null;

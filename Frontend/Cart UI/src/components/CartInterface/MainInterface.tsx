@@ -7,8 +7,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const BASE_URL = "http://192.168.2.22:8000";
-const CART_ID = "CART102";
+const BASE_URL = "http://10.152.93.220:8000";
+const CART_ID = "CART103";
 const POLL_MS = 2500;
 
 // ─── Store Layout (embedded from ST001.json) ───────────────────────────────────
