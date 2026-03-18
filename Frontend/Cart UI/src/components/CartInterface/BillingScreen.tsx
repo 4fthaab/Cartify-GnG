@@ -1,44 +1,22 @@
-// BillingScreen.tsx - FIXED VERSION with API Integration
+// BillingScreen.tsx - FIXED VERSION with Props Injection
 import { ArrowLeft, CheckCircle2, Wallet, Receipt, ShoppingCart, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
-const BASE_URL = "http://10.152.93.220:8000";
+const BASE_URL = "http://192.168.2.22:8000";
 const CART_ID = "CART103";
 
 interface BillingScreenProps {
+  cartItems: any[];        // <-- Receive items from parent
+  totalAmount: number;     // <-- Receive total from parent
   onBack: () => void;
-  onDone: (paymentData: { payment_id: string; amount: number; order_id: string; qr_payload: string }) => void;
+  onDone: (paymentData: { payment_id: string; amount: number; order_id: string; qr_payload: string; method:string; }) => void;
 }
 
-export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
+export const BillingScreen = ({ cartItems, totalAmount, onBack, onDone }: BillingScreenProps) => {
   const [paymentMethod, setPaymentMethod] = useState<"upi" | "cash" | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Live cart data
-  const [cartItems, setCartItems] = useState<any[]>([]);
-  const [subtotal, setSubtotal] = useState(0);
-  const [total, setTotal] = useState(0);
-
-  // Fetch current cart items
-  useEffect(() => {
-    const fetchCart = async () => {
-      try {
-        const res = await fetch(`${BASE_URL}/cart/view/${CART_ID}`);
-        const data = await res.json();
-        if (!data.error) {
-          setCartItems(data.items || []);
-          setSubtotal(data.total_price || 0);
-          setTotal(data.total_price || 0);
-        }
-      } catch (err) {
-        console.error("Failed to fetch cart", err);
-      }
-    };
-
-    fetchCart();
-  }, []);
 
   const handlePayNow = async () => {
     if (!paymentMethod) return;
@@ -79,7 +57,8 @@ export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
           payment_id: paymentSession.payment_id,
           amount: paymentSession.amount || data.order_summary?.total_price || 0,
           order_id: data.order_id,
-          qr_payload: paymentSession.qr_payload || ""
+          qr_payload: paymentSession.qr_payload || "",
+          method: paymentMethod
         });
       } else {
         setError("Failed to create payment session");
@@ -95,7 +74,7 @@ export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
     <div className="h-screen w-screen flex flex-col bg-gradient-to-br from-slate-50 via-green-50 to-emerald-100 p-4 md:p-6">
       {/* Top Header */}
       <div className="flex justify-between items-center mb-4 md:mb-6">
-        <Button
+        {/* <Button
           onClick={onBack}
           variant="ghost"
           className="flex items-center gap-2 text-slate-600 hover:text-slate-800"
@@ -103,7 +82,7 @@ export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
         >
           <ArrowLeft className="h-5 w-5" />
           <span className="hidden sm:inline">Continue Shopping</span>
-        </Button>
+        </Button> */}
 
         <div className="flex flex-col items-center">
           <h1 className="text-xl md:text-2xl font-bold text-slate-800 mt-2">Checkout Summary</h1>
@@ -121,9 +100,7 @@ export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
       )}
 
       {/* Billing Content */}
-      {/* Added pb-4 to prevent cutting off at the bottom of the screen */}
       <div className="flex-1 flex justify-center items-start w-full pb-8">
-        {/* Added items-start and overflow-y-auto to the wrapper to handle long content */}
         <div className="bg-white rounded-3xl p-6 md:p-4 max-w-3xl w-full flex flex-col my-auto">
 
           {/* Bill Title */}
@@ -133,7 +110,6 @@ export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
           </div>
 
           {/* Scrollable Item List */}
-          {/* Added min-h-[150px] to guarantee space for 2-3 items */}
           <div className="flex-1 overflow-y-auto pr-2 mb-4 space-y-3 min-h-[150px]">
             {cartItems.length === 0 ? (
               <div className="text-center py-8 text-slate-400">
@@ -160,23 +136,21 @@ export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
           <div className="space-y-2 text-sm text-slate-700 mb-4">
             <div className="flex justify-between">
               <span>Subtotal</span>
-              <span className="font-semibold">₹{subtotal.toFixed(2)}</span>
+              <span className="font-semibold">₹{totalAmount.toFixed(2)}</span>
             </div>
             <div className="border-t border-slate-200 pt-2 mt-2 flex justify-between text-base md:text-lg font-bold text-slate-800">
               <span>Total</span>
-              <span>₹{total.toFixed(2)}</span>
+              <span>₹{totalAmount.toFixed(2)}</span>
             </div>
           </div>
 
           {/* Payment Options */}
-          {/* Reduced bottom margin */}
           <div className="mb-4">
             <p className="font-semibold text-slate-800 text-sm mb-2">Select Payment Method</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3">
               <button
                 onClick={() => setPaymentMethod("upi")}
                 disabled={isProcessing}
-                // Reduced padding from p-4 to p-3, text size to text-sm
                 className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${paymentMethod === "upi"
                   ? "border-green-500 bg-green-50 shadow-md"
                   : "border-slate-200 hover:border-green-300 hover:bg-slate-50"
@@ -189,7 +163,6 @@ export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
               <button
                 onClick={() => setPaymentMethod("cash")}
                 disabled={isProcessing}
-                // Reduced padding from p-4 to p-3, text size to text-sm
                 className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${paymentMethod === "cash"
                   ? "border-green-500 bg-green-50 shadow-md"
                   : "border-slate-200 hover:border-green-300 hover:bg-slate-50"
@@ -205,7 +178,6 @@ export const BillingScreen = ({ onBack, onDone }: BillingScreenProps) => {
           <Button
             onClick={handlePayNow}
             disabled={!paymentMethod || isProcessing}
-            // Adjusted padding and text size slightly for better fit
             className={`w-full font-bold text-base shadow-lg py-5 ${paymentMethod && !isProcessing
               ? "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white"
               : "bg-slate-200 text-slate-400 cursor-not-allowed"

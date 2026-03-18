@@ -663,23 +663,33 @@ def cart_checkout(payload: dict):
             not_found = old_list.get("not_found", [])
             new_items = not_bought + not_found
             
-            timestamp = int(datetime.utcnow().timestamp())
-            next_list_id = f"{linked_user_id}_L{timestamp}"
-            new_list = {
-                "user_id": linked_user_id,
-                "list_id": next_list_id,
-                "items": new_items,
-                "created_at": datetime.utcnow().isoformat(),
-                "status": "pending",
-                "list_name": f"{old_list.get('list_name', 'My List')} (Next)"
-            }
-            db["shopping_lists"].insert_one(new_list)
-            remaining_items = len(new_items)
+            # 1. ONLY create forwarder if items remain
+            if len(new_items) > 0:
+                timestamp = int(datetime.utcnow().timestamp())
+                next_list_id = f"{linked_user_id}_L{timestamp}"
+                new_list = {
+                    "user_id": linked_user_id,
+                    "list_id": next_list_id,
+                    "items": new_items,
+                    "created_at": datetime.utcnow().isoformat(),
+                    "status": "pending",
+                    "list_name": f"{old_list.get('list_name', 'My List')} (Next)"
+                }
+                db["shopping_lists"].insert_one(new_list)
+                remaining_items = len(new_items)
+                
+                # Add new list to user doc
+                db["users"].update_one(
+                    {"user_id": linked_user_id},
+                    {"$addToSet": {"shopping_lists": {"list_id": next_list_id, "list_name": new_list["list_name"]}}}
+                )
             
-            db["shopping_lists"].update_one(
-                {"user_id": linked_user_id, "list_id": linked_list_id},
-                {"$set": {"status": "completed", "archived_at": datetime.utcnow().isoformat()}}
-            )
+            # 2. DELETE the old list entirely
+            db["shopping_lists"].delete_one({"user_id": linked_user_id, "list_id": linked_list_id})
+            db["users"].update_one(
+                {"user_id": linked_user_id},
+                {"$pull": {"shopping_lists": {"list_id": linked_list_id}}}
+            )          
     
     # ✅ Save receipt for reference
     receipt = {
@@ -722,7 +732,6 @@ def cart_checkout(payload: dict):
         },
         "receipt": clean(receipt)
     }
-
 
 @router.get("/receipt/{order_id}")
 def get_receipt(order_id: str):

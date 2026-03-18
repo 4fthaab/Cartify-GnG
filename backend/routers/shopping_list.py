@@ -75,20 +75,9 @@ def create_shopping_list(payload: dict):
 
 @router.post("/update")
 def update_shopping_list(payload: dict = Body(...)):
-    """
-    Update shopping list after checkout or cart session end.
-    Keeps only not-bought or not-found items for reuse.
-    Expected payload:
-    {
-        "user_id": "USR123",
-        "list_id": "USR123_L1762675439",
-        "mode": "checkout"   # or "manual"
-    }
-    """
     db = get_db()
     user_id = payload.get("user_id")
     list_id = payload.get("list_id")
-    mode = payload.get("mode", "checkout")
 
     if not (user_id and list_id):
         return {"error": "Missing required fields"}
@@ -98,46 +87,55 @@ def update_shopping_list(payload: dict = Body(...)):
         return {"error": "Shopping list not found"}
 
     old_items = shopping_list.get("items", [])
-    not_bought = [i for i in old_items if not i.get("bought")]
+    # Safely handle both dicts and strings
+    not_bought = [
+        i for i in old_items 
+        if not (isinstance(i, dict) and i.get("bought"))
+    ]
     not_found = shopping_list.get("not_found", [])
-
     new_items = not_bought + not_found
 
-    # Generate a new list_id for next session
-    timestamp = int(datetime.utcnow().timestamp())
-    new_list_id = f"{user_id}_L{timestamp}"
+    new_list_id = None
+    
+    # 1. ONLY create new list if there are remaining items
+    if len(new_items) > 0:
+        timestamp = int(datetime.utcnow().timestamp())
+        new_list_id = f"{user_id}_L{timestamp}"
+        new_list_doc = {
+            "user_id": user_id,
+            "list_id": new_list_id,
+            "items": new_items,
+            "created_at": datetime.utcnow().isoformat(),
+            "status": "pending",
+            "list_name": f"{shopping_list.get('list_name', 'My List')} (Next)"
+        }
+        db["shopping_lists"].insert_one(new_list_doc)
+        
+        # Add the new list to the user's document
+        db["users"].update_one(
+            {"user_id": user_id},
+            {"$addToSet": {"shopping_lists": {"list_id": new_list_id, "list_name": new_list_doc["list_name"]}}}
+        )
 
-    # Create new list for next session
-    new_list_doc = {
-        "user_id": user_id,
-        "list_id": new_list_id,
-        "items": new_items,
-        "created_at": datetime.utcnow().isoformat(),
-        "status": "pending",
-        "list_name": f"{shopping_list.get('list_name', 'My List')} (Next)"
-    }
-
-    db["shopping_lists"].insert_one(new_list_doc)
-
-    # Optional: archive the old list
-    db["shopping_lists"].update_one(
-        {"user_id": user_id, "list_id": list_id},
-        {"$set": {"status": "completed", "archived_at": datetime.utcnow().isoformat()}}
+    # 2. DELETE the old list entirely (instead of marking completed)
+    db["shopping_lists"].delete_one({"user_id": user_id, "list_id": list_id})
+    db["users"].update_one(
+        {"user_id": user_id},
+        {"$pull": {"shopping_lists": {"list_id": list_id}}}
     )
 
-    # Optional: clear linked cart
+    # 3. Clear linked cart
     db["carts"].update_many(
         {"linked_user_id": user_id, "linked_list_id": list_id},
         {"$set": {"linked": False, "checkout_time": datetime.utcnow().isoformat()}}
     )
 
     return {
-        "message": "Shopping list finalized and next-session list created.",
+        "message": "Shopping list finalized.",
         "old_list_id": list_id,
         "new_list_id": new_list_id,
         "remaining_items_count": len(new_items)
     }
-
 
 # ✅ SELECT LIST FOR CART
 @router.post("/select")
@@ -311,6 +309,7 @@ def mark_item_as_bought(payload: dict = Body(...)):
         "cart_id": cart_id,
         "list_id": list_id
     }
+
 @router.post("/add-item")
 def add_item_to_list(payload: dict):
     db = get_db()
@@ -359,7 +358,6 @@ def delete_shopping_list(payload: dict):
     )
     return {"message": "Selected items removed", "removed": items}
 
-
 # 🧩 FETCH USER LISTS (sorted by most recent first)
 @router.get("/get/{user_id}")
 def get_user_lists(user_id: str):
@@ -368,7 +366,11 @@ def get_user_lists(user_id: str):
     if not user:
         return {"error": "Invalid user_id"}
 
+    # BULLETPROOF: "items.0: exists" guarantees the array has at least 1 item
     lists = list(
-        db["shopping_lists"].find({"user_id": user_id}, {"_id": 0}).sort("created_at", -1)
+        db["shopping_lists"].find({
+            "user_id": user_id,
+            "items.0": {"$exists": True} 
+        }, {"_id": 0}).sort("created_at", -1)
     )
     return {"shopping_lists": lists}

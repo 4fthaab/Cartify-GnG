@@ -3,11 +3,11 @@ import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import {
   ShoppingCart, List, MapPin, Search, X, AlertCircle,
-  CheckCircle2, ArrowRight, ChevronLeft, Loader2, RefreshCw,
+  CheckCircle2, ArrowRight, ChevronLeft, Loader2, RefreshCw, Gift, Tag
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const BASE_URL = "http://10.152.93.220:8000";
+const BASE_URL = "http://192.168.2.22:8000";
 const CART_ID = "CART103";
 const POLL_MS = 2500;
 
@@ -377,7 +377,7 @@ const CheckoutModal = ({
 
 // ─── Main Interface ─────────────────────────────────────────────────────────────
 
-interface MainInterfaceProps { onBack: () => void; onCheckout: () => void; }
+interface MainInterfaceProps { onBack: () => void; onCheckout: (items: CartItem[], total: number) => void; }
 
 export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
   const [userId, setUserId] = useState<string | null>(null);
@@ -390,7 +390,7 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
   const [loadingLists, setLoadingLists] = useState(false);
   const [selectingList, setSelectingList] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const [offers, setOffers] = useState<any[]>([]);
 
   // ── Read user_id from localStorage (set by LoginScreen)
   useEffect(() => {
@@ -400,15 +400,7 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
     } catch { /* guest */ }
   }, []);
 
-  // ── Camera
-  useEffect(() => {
-    let stream: MediaStream | null = null;
-    navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false })
-      .then(s => { stream = s; if (videoRef.current) videoRef.current.srcObject = s; })
-      .catch(e => console.error("Camera:", e));
-    return () => { stream?.getTracks().forEach(t => t.stop()); };
-  }, []);
-
+  // ── Poll /cart/display every POLL_MS — single source of truth
   // ── Poll /cart/display every POLL_MS — single source of truth
   const pollCart = useCallback(async () => {
     try {
@@ -417,6 +409,19 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
       const data: CartDisplay = await res.json();
       if ((data as any).error) return;
       setCartDisplay(data);
+
+      // --- NEW FIX: Auto-sync User ID from backend polling ---
+      if (data.linked_user_id) {
+        setUserId(prev => {
+          if (prev !== data.linked_user_id) {
+            // Save it so it persists, and returning it triggers fetchLists() automatically!
+            localStorage.setItem("cart_user", JSON.stringify({ user_id: data.linked_user_id }));
+            return data.linked_user_id;
+          }
+          return prev;
+        });
+      }
+
       // Auto-enter list view if cart already has a linked list
       if (data.linked_list_id) setSelectedListId(id => id ?? data.linked_list_id!);
     } catch { /* silent */ }
@@ -427,6 +432,19 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
     const id = setInterval(pollCart, POLL_MS);
     return () => clearInterval(id);
   }, [pollCart]);
+
+  useEffect(() => {
+    const fetchOffers = async () => {
+      try {
+        const res = await fetch(`${BASE_URL}/offers/all`);
+        const data = await res.json();
+        if (data.offers) setOffers(data.offers);
+      } catch (e) {
+        console.error("Failed to fetch offers", e);
+      }
+    };
+    fetchOffers();
+  }, []);
 
   // ── Fetch user's shopping lists
   const fetchLists = useCallback(async () => {
@@ -470,7 +488,8 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
   // ── Checkout — just navigate to BillingScreen; actual /cart/checkout is called
   // from PaymentScreen once the user has selected a payment method.
   const handleCheckout = async () => {
-    setShowModal(false); onCheckout();
+    setShowModal(false);
+    onCheckout(cartItems, totalAmount); // <-- Pass the data up!
   };
 
   // ── Derived state from cartDisplay
@@ -742,17 +761,53 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
           )}
         </div>
 
-        {/* ── Right: Camera + Checkout ── */}
+        {/* ── Right: Offers + Checkout ── */}
         <div className="w-1/4 p-6 flex flex-col gap-4 min-w-0">
-          <div className="flex-1 bg-black rounded-2xl shadow-md overflow-hidden relative border-4 border-blue-200">
-            <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover" />
-            <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-2 z-10">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />SCAN CAMERA
+
+          <div className="flex-1 bg-slate-50 rounded-2xl shadow-md overflow-hidden relative border-4 border-amber-200 flex flex-col">
+            {/* Inline CSS for the continuous vertical scroll */}
+            <style>{`
+              @keyframes scrollVertical {
+                0% { transform: translateY(0); }
+                100% { transform: translateY(-50%); }
+              }
+              .animate-scroll-vertical {
+                animation: scrollVertical 20s linear infinite;
+              }
+              .animate-scroll-vertical:hover {
+                animation-play-state: paused;
+              }
+            `}</style>
+
+            {/* Header */}
+            <div className="bg-gradient-to-r from-amber-400 to-orange-500 px-4 py-3 z-20 shadow-sm flex items-center justify-center gap-2">
+              <Gift className="w-5 h-5 text-white" />
+              <h3 className="font-bold text-white tracking-wide">Live Store Offers</h3>
             </div>
-            <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-lg text-xs z-10">
-              AI Detection Active
+
+            {/* Scrolling Content Area */}
+            <div className="flex-1 overflow-hidden relative">
+              {offers.length === 0 ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
+                  <Loader2 className="h-8 w-8 animate-spin mb-2 opacity-50" />
+                  <p className="text-sm font-medium">Fetching offers...</p>
+                </div>
+              ) : (
+                <div className="absolute inset-x-0 top-0 flex flex-col gap-3 p-3 animate-scroll-vertical">
+                  {/* Repeat the offers array 4 times to ensure a seamless infinite scrolling loop */}
+                  {[...offers, ...offers, ...offers, ...offers].map((offer, i) => (
+                    <div key={i} className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl p-4 text-white shrink-0 shadow-md flex flex-col justify-center min-h-[90px] cursor-default">
+                      <h4 className="font-bold text-base mb-1">{offer.title}</h4>
+                      <p className="text-sm opacity-90 leading-snug line-clamp-3">{offer.description}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Fade gradients for smooth entry/exit */}
+              <div className="absolute bottom-0 inset-x-0 h-10  z-10 pointer-events-none" />
+              <div className="absolute top-0 inset-x-0 h-6  z-10 pointer-events-none" />
             </div>
-            <div className="absolute inset-x-0 h-[2px] bg-blue-400/30 shadow-[0_0_15px_rgba(96,165,250,0.5)] animate-[scan_3s_linear_infinite] z-20 pointer-events-none" />
           </div>
 
           <div className="bg-white rounded-2xl shadow-lg p-6 space-y-4">

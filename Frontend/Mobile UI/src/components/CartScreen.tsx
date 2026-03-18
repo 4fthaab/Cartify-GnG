@@ -3,7 +3,7 @@ import { Button } from './ui/button';
 import { useState, useEffect, useRef } from 'react';
 import { Html5Qrcode } from "html5-qrcode";
 
-const API_BASE = "http://10.152.93.220:8000";
+const API_BASE = "http://192.168.2.22:8000";
 
 interface CartScreenProps {
   onBack: () => void;
@@ -101,8 +101,18 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked 
     const fetchLiveCart = async () => {
       if (!session.cart_id) return;
       try {
-        const res = await fetch(`${API_BASE}/cart/view/${session.cart_id}`);
+        // Change from /view/ to /display/ to get the full cart status
+        const res = await fetch(`${API_BASE}/cart/display/${session.cart_id}`);
         const data = await res.json();
+
+        // AUTO-UNLINK: If the cart is deep-cleaned (Cash payment done or user logged out)
+        if (data.status === "available" || data.linked_user_id !== user.user_id) {
+          localStorage.removeItem("cart_session");
+          onCartUnlinked();
+          onBack();
+          return;
+        }
+
         if (!data.error) {
           setCartItems(data.items || []);
           setCartSummary({ total_price: data.total_price || 0 });
@@ -115,7 +125,7 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked 
     fetchLiveCart();
     const interval = setInterval(fetchLiveCart, 3000);
     return () => clearInterval(interval);
-  }, [isLinked, isScanningPayment, paymentDone]);
+  }, [isLinked, isScanningPayment, paymentDone, user.user_id, onBack, onCartUnlinked]);
 
   // ── 3. Poll for active payment session on cart ────────────────
   // Only activates once cart is linked. When cart UI initiates checkout, this
@@ -214,7 +224,7 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked 
           setPaymentDone(false);
           setIsScanning(true);
           setIsLinked(false);
-          // onCartUnlinked(); // tell parent to reset isCartLinked → false → back to homescreen
+          onCartUnlinked(); // tell parent to reset isCartLinked → false → back to homescreen
           onBack();
         }, 3000);
       } else {

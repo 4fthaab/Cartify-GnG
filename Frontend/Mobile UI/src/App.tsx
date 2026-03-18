@@ -85,6 +85,7 @@ export default function App() {
             onBack={handleBack}
             isCartLinked={isCartLinked}
             onCartLinked={handleCartLinked}
+            onCartUnlinked={() => setIsCartLinked(false)} // <-- 1. ADD THIS LINE
           />
         )}
 

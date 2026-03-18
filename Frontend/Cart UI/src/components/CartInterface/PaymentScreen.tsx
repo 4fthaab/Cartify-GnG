@@ -1,11 +1,11 @@
-// PaymentScreen.tsx - FIXED VERSION
+// components/CartInterface/PaymentScreen.tsx
 import { useState, useEffect, useRef } from "react";
 import { QRCodeCanvas } from "qrcode.react";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ReceiptScreen } from "./ReceiptScreen";
 
-const BASE_URL = "http://10.152.93.220:8000";
+const BASE_URL = "http://192.168.2.22:8000";
 
 interface PaymentScreenProps {
   paymentData: {
@@ -13,20 +13,54 @@ interface PaymentScreenProps {
     amount: number;
     order_id: string;
     qr_payload: string;
+    method: string;
   };
   onBack: () => void;
-  onDone: () => void; // called after successful payment
+  onDone: () => void;
 }
 
 export const PaymentScreen = ({ paymentData, onBack, onDone }: PaymentScreenProps) => {
-  const [phase, setPhase] = useState<"pending" | "success" | "failed">("pending");
+  // If cash is selected, instantly jump to "success" to bypass the QR code
+  const [phase, setPhase] = useState<"pending" | "success" | "failed">(
+    paymentData.method === "cash" ? "success" : "pending"
+  );
   const [orderItems, setOrderItems] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Poll /mock-payment/status/{payment_id} until paid or failed
+  // 1. Secretly notify backend to clean cart if paying by Cash
   useEffect(() => {
-    if (phase !== "pending" || !paymentData.payment_id) return;
+    if (paymentData.method === "cash" && phase === "success") {
+      fetch(`${BASE_URL}/mock-payment/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          payment_id: paymentData.payment_id,
+          status: "success",
+          method: "cash",
+          payer_ref: "CASH_COUNTER"
+        })
+      }).catch(e => console.error("Failed to mark cash payment complete", e));
+    }
+  }, [paymentData.method, phase, paymentData.payment_id]);
+
+  // 2. Fetch receipt data immediately (Needed for both Cash and UPI)
+  useEffect(() => {
+    const fetchReceiptData = async () => {
+      try {
+        const oRes = await fetch(`${BASE_URL}/cart/receipt/${paymentData.order_id}`);
+        const oData = await oRes.json();
+        setOrderItems(oData.items ?? []);
+      } catch {
+        /* silent */
+      }
+    };
+    fetchReceiptData();
+  }, [paymentData.order_id]);
+
+  // 3. Poll for payment status ONLY if method is NOT cash (i.e. UPI)
+  useEffect(() => {
+    if (paymentData.method === "cash" || phase !== "pending" || !paymentData.payment_id) return;
 
     pollRef.current = setInterval(async () => {
       try {
@@ -35,16 +69,6 @@ export const PaymentScreen = ({ paymentData, onBack, onDone }: PaymentScreenProp
 
         if (data.status === "success" || data.status === "paid") {
           clearInterval(pollRef.current!);
-
-          // Fetch order items for receipt
-          try {
-            const oRes = await fetch(`${BASE_URL}/cart/receipt/${paymentData.order_id}`);
-            const oData = await oRes.json();
-            setOrderItems(oData.items ?? []);
-          } catch {
-            /* silent */
-          }
-
           setPhase("success");
         } else if (data.status === "failed") {
           clearInterval(pollRef.current!);
@@ -59,9 +83,9 @@ export const PaymentScreen = ({ paymentData, onBack, onDone }: PaymentScreenProp
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [phase, paymentData.payment_id, paymentData.order_id]);
+  }, [phase, paymentData.payment_id, paymentData.method]);
 
-  // Failed
+  // View: Failed
   if (phase === "failed") {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-red-50">
@@ -75,20 +99,20 @@ export const PaymentScreen = ({ paymentData, onBack, onDone }: PaymentScreenProp
     );
   }
 
-  // Success → show receipt
+  // View: Success → show receipt
   if (phase === "success") {
     return (
       <ReceiptScreen
         items={orderItems}
         total={paymentData.amount}
-        paymentMethod="upi"
+        paymentMethod={paymentData.method}
         paymentId={paymentData.payment_id}
         onDone={onDone}
       />
     );
   }
 
-  // Pending: show QR for mobile to scan
+  // View: Pending → show QR for mobile to scan
   return (
     <div className="h-screen w-screen flex items-center justify-center bg-green-50">
       <div className="bg-white p-10 rounded-3xl shadow-2xl flex flex-col items-center justify-center text-center min-w-[380px] max-w-md w-full">

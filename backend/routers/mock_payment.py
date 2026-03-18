@@ -169,29 +169,45 @@ def complete_payment(payload: dict):
         except Exception as e:
             stock_result = {"error": str(e)}
 
-        # 6. NOW clear cart items and unlock (payment is complete)
+        # 6. NOW completely clear the cart, unlink the user, and unlock
         if cart_id:
             db["carts"].update_one(
                 {"cart_id": cart_id},
                 {
                     "$set": {
-                        "items": [],
-                        "total_items": 0,
-                        "total_price": 0,
-                        "total_weight": 0,
-                        "status": "in_use",  # Keep in_use for user to continue shopping
-                        "pending_payment": False,
+                        "status": "available", # Changed from "in_use"
+                        "locked": False
                     },
                     "$unset": {
+                        "items": "",
+                        "total_items": "",
+                        "total_price": "",
+                        "total_weight": "",
+                        "pending_payment": "",
                         "active_payment_id": "",
                         "active_payment_amount": "",
                         "active_order_id": "",
                         "checked_out": "",
                         "checkout_time": "",
+                        "user_list_items": "",
+                        "linked": "",
+                        "linked_list_id": "",
+                        "linked_user_id": "",
+                        "backend_matches": "",
+                        "linked_at": "",
+                        "list_name": "",
+                        "optimized_path": "",
+                        "current_session": "",
+                        "current_location": "",
+                        "checkout_initiated_at": "",
+                        "checkout_stage": ""
                     }
                 }
             )
             unlock_cart(cart_id)
+            
+            # Clean up related hardware detections so ghost items don't appear for the next user
+            db["detections"].delete_many({"cart_id": cart_id})
 
         # 7. Add receipt to user's account
         if user_id:

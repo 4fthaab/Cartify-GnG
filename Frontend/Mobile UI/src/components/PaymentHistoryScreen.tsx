@@ -9,7 +9,7 @@ interface Props {
   onBack: () => void;
 }
 
-const API_BASE = "http://10.152.93.220:8000";
+const API_BASE = "http://192.168.2.22:8000";
 
 export function PaymentHistoryScreen({ onBack }: Props) {
 
@@ -125,8 +125,8 @@ export function PaymentHistoryScreen({ onBack }: Props) {
                 ₹{pay.amount.toFixed(2)}
               </p>
               <span className={`text-xs px-2 py-0.5 rounded-full ${pay.status === "success" || pay.status === "paid"
-                  ? "bg-green-100 text-green-700"
-                  : "bg-yellow-100 text-yellow-700"
+                ? "bg-green-100 text-green-700"
+                : "bg-yellow-100 text-yellow-700"
                 }`}>
                 {pay.status}
               </span>

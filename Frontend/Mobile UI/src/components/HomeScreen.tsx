@@ -13,7 +13,7 @@ interface HomeScreenProps {
   isCartLinked: boolean;
 }
 
-const API_BASE = "http://10.152.93.220:8000";
+const API_BASE = "http://192.168.2.22:8000";
 
 export function HomeScreen({ onNavigate, cartItems, isDarkMode, onToggleTheme, isCartLinked }: HomeScreenProps) {
   const storedUser = JSON.parse(localStorage.getItem("user") || "null");
@@ -85,7 +85,7 @@ export function HomeScreen({ onNavigate, cartItems, isDarkMode, onToggleTheme, i
 
   const quickActions = [
     { icon: ListChecks, label: 'Shopping List', screen: 'list' },
-    { icon: ShoppingCart, label: 'My Cart', screen: 'cart', badge: cartItems },
+    { icon: ShoppingCart, label: 'My Cart', screen: 'cart' },
     { icon: Gift, label: 'Offers', screen: 'offers' }
   ];
 
