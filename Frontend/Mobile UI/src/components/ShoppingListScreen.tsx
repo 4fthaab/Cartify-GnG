@@ -143,7 +143,7 @@ export function ShoppingListScreen({ onBack }: ShoppingListScreenProps) {
   };
 
   return (
-    <div className="h-full bg-background flex flex-col">
+    <div className="min-h-[100dvh] w-full flex flex-col bg-background">
 
       {/* Header */}
       <div className="bg-card px-6 py-4 shadow-sm">

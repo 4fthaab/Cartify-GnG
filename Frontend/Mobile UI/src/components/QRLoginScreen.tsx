@@ -1,4 +1,4 @@
-import { Mail, Lock, Eye, EyeOff, Phone } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { useState } from 'react';
@@ -18,11 +18,42 @@ export function QRLoginScreen({ onLogin }: QRLoginScreenProps) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  
+  // Track if the user has tried to submit, to trigger red borders
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+
+  // Validation Helpers
+  const isValidEmail = (str: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str);
+  const isValidPhone = (str: string) => /^\d{10}$/.test(str);
 
   const handleAuth = async () => {
+    setAttemptedSubmit(true);
     setError("");
-    setLoading(true);
 
+    // --- 1. FRONTEND VALIDATION ---
+    
+    // Check for empty fields (Both Login and Signup)
+    if (!emailOrPhone || !password || (!isLogin && !name)) {
+      setError("Please fill in all required fields.");
+      return; 
+    }
+
+    // Signup-specific constraints
+    if (!isLogin) {
+      if (password.length < 8) {
+        setError("Password must be at least 8 characters long.");
+        return;
+      }
+      
+      if (!isValidEmail(emailOrPhone) && !isValidPhone(emailOrPhone)) {
+        setError("Please enter a valid email or a 10-digit phone number.");
+        return;
+      }
+    }
+
+    // --- 2. BACKEND API CALL ---
+    
+    setLoading(true);
     try {
       if (isLogin) {
         // LOGIN
@@ -72,7 +103,9 @@ export function QRLoginScreen({ onLogin }: QRLoginScreenProps) {
 
         if (data.status === "success") {
           setIsLogin(true);
-          setError("Account created! Please login.");
+          setAttemptedSubmit(false); // Reset validation UI
+          setPassword(""); // Clear password for login
+          setError("Account created! Please sign in.");
         } else {
           setError(data.message || "Signup failed");
         }
@@ -85,6 +118,30 @@ export function QRLoginScreen({ onLogin }: QRLoginScreenProps) {
     setLoading(false);
   };
 
+  // --- UI Helpers ---
+  
+  const toggleAuthMode = () => {
+    setIsLogin(!isLogin);
+    setError("");
+    setAttemptedSubmit(false); // Reset red borders when switching modes
+  };
+
+  // Determine if a field should have a red border
+  const getBorderClass = (fieldValue: string, isFieldInvalid?: boolean) => {
+    const baseClass = "h-12 rounded-xl transition-colors";
+    const errorClass = "border-red-500 focus-visible:ring-red-500";
+    
+    // Show red if submitted AND (field is empty OR fails specific validation)
+    if (attemptedSubmit && (!fieldValue || isFieldInvalid)) {
+      return `${baseClass} ${errorClass}`;
+    }
+    return baseClass;
+  };
+
+  // Check specific field invalid states for styling
+  const isEmailPhoneInvalid = !isLogin && attemptedSubmit && emailOrPhone ? (!isValidEmail(emailOrPhone) && !isValidPhone(emailOrPhone)) : false;
+  const isPasswordInvalid = !isLogin && attemptedSubmit && password ? password.length < 8 : false;
+
   return (
     <div className="h-full bg-background flex flex-col">
       <div className="flex-1 flex flex-col items-center justify-center p-8 gap-6">
@@ -92,73 +149,75 @@ export function QRLoginScreen({ onLogin }: QRLoginScreenProps) {
           <span className="text-white text-4xl">🛒</span>
         </div>
 
-        <h2 className="text-2xl text-center text-foreground">
+        <h2 className="text-2xl text-center text-foreground font-semibold">
           {isLogin ? 'Welcome Back!' : 'Create Account'}
         </h2>
 
         <div className="w-full max-w-sm space-y-4 mt-4">
 
-          {/* Name (Only for Signup) */}
+          {/* Name Field (Only for Signup) */}
           {!isLogin && (
             <Input
               placeholder="Full Name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="h-12 rounded-xl"
+              className={getBorderClass(name)}
             />
           )}
 
-          {/* Email or Phone */}
+          {/* Email or Phone Field */}
           <div className="relative">
             <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Email or Phone"
+              placeholder="Email or 10-digit Phone"
               value={emailOrPhone}
               onChange={(e) => setEmailOrPhone(e.target.value)}
-              className="pl-12 h-12 rounded-xl"
+              className={`pl-12 ${getBorderClass(emailOrPhone, isEmailPhoneInvalid)}`}
             />
           </div>
 
-          {/* Password */}
+          {/* Password Field */}
           <div className="relative">
             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input
               type={showPassword ? "text" : "password"}
-              placeholder="Password"
+              placeholder={isLogin ? "Password" : "Password (min. 8 characters)"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="pl-12 pr-12 h-12 rounded-xl"
+              className={`pl-12 pr-12 ${getBorderClass(password, isPasswordInvalid)}`}
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
             >
               {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
           </div>
 
+          {/* Error Message Display */}
           {error && (
-            <p className="text-red-500 text-sm text-center">{error}</p>
+            <p className="text-red-500 text-sm text-center font-medium animate-in fade-in slide-in-from-top-1">
+              {error}
+            </p>
           )}
 
+          {/* Submit Button */}
           <Button
             onClick={handleAuth}
             disabled={loading}
-            className="w-full bg-[#FF3347] hover:bg-[#FF5566] text-white rounded-xl h-12"
+            className="w-full bg-[#FF3347] hover:bg-[#FF5566] text-white rounded-xl h-12 font-medium transition-colors"
           >
             {loading ? "Please wait..." : isLogin ? "Sign In" : "Create Account"}
           </Button>
 
+          {/* Toggle Login/Signup */}
           <p className="text-center text-sm text-muted-foreground mt-6">
             {isLogin ? "Don't have an account? " : "Already have an account? "}
             <button
-              onClick={() => {
-                setError("");
-                setIsLogin(!isLogin);
-              }}
-              className="text-[#FF3347]"
+              onClick={toggleAuthMode}
+              className="text-[#FF3347] font-medium hover:underline"
             >
               {isLogin ? "Sign up" : "Sign in"}
             </button>

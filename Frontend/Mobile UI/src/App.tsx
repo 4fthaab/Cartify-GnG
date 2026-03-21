@@ -18,13 +18,24 @@ export default function App() {
   const [isCartLinked, setIsCartLinked] = useState<boolean>(() => {
     // Check if a cart session exists in storage on initialization
     return localStorage.getItem("cart_session") !== null;
-  }); const [showReportModal, setShowReportModal] = useState(false);
+  }); 
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // Restore session
   useEffect(() => {
     const stored = localStorage.getItem("user");
     if (stored) setUser(JSON.parse(stored));
   }, []);
+
+  // Apply dark mode globally to the HTML root
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (isDarkMode) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [isDarkMode]);
 
   // Splash screen first
   if (!isSplashDone) {
@@ -63,49 +74,49 @@ export default function App() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-[#1a2b3c]">
-      <div className={`w-[393px] h-[852px] bg-background shadow-2xl rounded-[3rem] overflow-hidden relative flex flex-col ${isDarkMode ? 'dark' : ''}`}>
+    // REMOVED: The outer centering div and the fixed width/height/rounded corners
+    // ADDED: w-full min-h-[100dvh] for true mobile edge-to-edge responsiveness
+    <div className={`w-full min-h-[100dvh] bg-background flex flex-col ${isDarkMode ? 'dark' : ''}`}>
 
-        {currentScreen === 'home' && (
-          <HomeScreen
-            onNavigate={handleNavigate}
-            cartItems={cartItems}
-            isDarkMode={isDarkMode}
-            onToggleTheme={toggleTheme}
-            isCartLinked={isCartLinked}
-          />
-        )}
+      {currentScreen === 'home' && (
+        <HomeScreen
+          onNavigate={handleNavigate}
+          cartItems={cartItems}
+          isDarkMode={isDarkMode}
+          onToggleTheme={toggleTheme}
+          isCartLinked={isCartLinked}
+        />
+      )}
 
-        {currentScreen === 'list' && (
-          <ShoppingListScreen onBack={handleBack} />
-        )}
+      {currentScreen === 'list' && (
+        <ShoppingListScreen onBack={handleBack} />
+      )}
 
-        {currentScreen === 'cart' && (
-          <CartScreen
-            onBack={handleBack}
-            isCartLinked={isCartLinked}
-            onCartLinked={handleCartLinked}
-            onCartUnlinked={() => setIsCartLinked(false)} // <-- 1. ADD THIS LINE
-          />
-        )}
+      {currentScreen === 'cart' && (
+        <CartScreen
+          onBack={handleBack}
+          isCartLinked={isCartLinked}
+          onCartLinked={handleCartLinked}
+          onCartUnlinked={() => setIsCartLinked(false)} 
+        />
+      )}
 
-        {currentScreen === 'offers' && (
-          <OffersScreen onBack={handleBack} />
-        )}
+      {currentScreen === 'offers' && (
+        <OffersScreen onBack={handleBack} />
+      )}
 
-        {currentScreen === 'orders' && (
-          <RecentOrdersScreen onBack={handleBack} />
-        )}
+      {currentScreen === 'orders' && (
+        <RecentOrdersScreen onBack={handleBack} />
+      )}
 
-        {currentScreen === 'payments' && (
-          <PaymentHistoryScreen onBack={handleBack} />
-        )}
+      {currentScreen === 'payments' && (
+        <PaymentHistoryScreen onBack={handleBack} />
+      )}
 
-        {showReportModal && (
-          <ReportIssueModal onClose={() => setShowReportModal(false)} />
-        )}
+      {showReportModal && (
+        <ReportIssueModal onClose={() => setShowReportModal(false)} />
+      )}
 
-      </div>
     </div>
   );
 }

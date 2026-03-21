@@ -2,25 +2,39 @@ from fastapi import APIRouter
 from datetime import datetime
 from utils.db import get_db
 import hashlib
-
+import re
 router = APIRouter(prefix="/user", tags=["User Auth"])
 
 def hash_password(pw: str) -> str:
     return hashlib.sha256(pw.encode()).hexdigest()
 
+def is_valid_email(email: str) -> bool:
+    if not email: return False
+    return bool(re.match(r"[^@]+@[^@]+\.[^@]+", email))
+
 @router.post("/signup")
 def signup_user(data: dict):
-    """
-    { "name":"USER123", "email":"user1@test.com", "phone":"9999999999", "password":"123456" }
-    """
     db = get_db()
     email = data.get("email")
     phone = data.get("phone")
     name = data.get("name")
     password = data.get("password")
 
-    if not (email or phone):
-        return {"status": "error", "message": "Email or phone required"}
+    # 1. Validation Rules
+    if not name or len(name.strip()) < 2:
+        return {"status": "error", "message": "Valid name is required"}
+    
+    if not email and not phone:
+        return {"status": "error", "message": "Email or 10-digit phone number required"}
+    
+    if email and not is_valid_email(email):
+        return {"status": "error", "message": "Invalid email format"}
+    
+    if phone and (not phone.isdigit() or len(phone) != 10):
+        return {"status": "error", "message": "Phone number must be 10 digits"}
+
+    if not password or len(password) < 8:
+        return {"status": "error", "message": "Password must be at least 8 characters"}
 
     query = []
 

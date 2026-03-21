@@ -123,7 +123,7 @@ export function HomeScreen({ onNavigate, cartItems, isDarkMode, onToggleTheme, i
   ];
 
   return (
-    <div className="h-screen bg-background flex flex-col overflow-hidden">
+    <div className="min-h-[100dvh] w-full bg-background flex flex-col overflow-hidden">
       {/* Header */}
       <div className="bg-card px-6 py-4 shadow-sm">
         <div className="flex items-center justify-between mb-4">
@@ -197,7 +197,7 @@ export function HomeScreen({ onNavigate, cartItems, isDarkMode, onToggleTheme, i
                   <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0">
                     <span className="text-white text-xs">5x</span>
                   </div>
-                  <p className="text-white/90 text-sm">Earn 5x points when you link your cart</p>
+                  <p className="text-white/90 text-sm">Earn 5x points by linking your cart</p>
                 </div>
               </div>
             </Card>
