@@ -1,5 +1,3 @@
-print("NEW OPTIMIZER CALLED")
-
 def build_grid(layout: dict):
 
     # 1️⃣ Get grid size
@@ -177,74 +175,79 @@ def compute_distance_matrix(grid, nodes):
 
     return distance
 
-def tsp_nearest_neighbor(entry, pickups, billing, distance):
+def tsp_2opt(order, distance):
+    """Refines the path to eliminate criss-crossing (Greedy Traps)"""
+    improved = True
+    best_order = order[:]
+    
+    def path_distance(p):
+        d = 0
+        for i in range(len(p)-1):
+            # Handle mixing of tuples (entry/billing) and dicts (items)
+            coord1 = p[i] if isinstance(p[i], tuple) else p[i]["pickup_point"]
+            coord2 = p[i+1] if isinstance(p[i+1], tuple) else p[i+1]["pickup_point"]
+            d += distance.get((coord1, coord2), float('inf'))
+        return d
 
-    unvisited = set(pickups)
-    order = [entry]
-    current = entry
+    while improved:
+        improved = False
+        # Do not reverse the Entry (0) or Billing (len-1) points
+        for i in range(1, len(best_order) - 2):
+            for j in range(i + 1, len(best_order) - 1):
+                new_order = best_order[:i] + best_order[i:j+1][::-1] + best_order[j+1:]
+                if path_distance(new_order) < path_distance(best_order):
+                    best_order = new_order
+                    improved = True
+    return best_order
 
-    while unvisited:
-        next_node = min(
-            unvisited,
-            key=lambda x: distance.get((current, x), float("inf"))
-        )
-        order.append(next_node)
-        unvisited.remove(next_node)
-        current = next_node
-
-    order.append(billing)
-
-    return order
 
 def optimize_path(matched_items, layout):
-
     # 1️⃣ Build grid
     grid, entry, billing = build_grid(layout)
 
-    # 2️⃣ Compute pickup points
-    pickup_map = {}  # coordinate -> item
-    pickup_points = []
+    # 2️⃣ Track ITEMS, not just coordinates (fixes the dropped items bug)
+    item_coords = []
+    unique_coords = set()
+    unique_coords.add(entry)
+    unique_coords.add(billing)
 
     for item in matched_items:
         pickup = compute_pickup_point(item, layout)
+        item["pickup_point"] = pickup
+        item_coords.append(item)
+        unique_coords.add(pickup)
 
-        pickup_map[pickup] = item
-        pickup_points.append(pickup)
+    # 3️⃣ Compute distance matrix ONLY for unique coordinates (saves compute)
+    dist_matrix = compute_distance_matrix(grid, list(unique_coords))
 
-    # 3️⃣ Build nodes list
-    nodes = [entry] + pickup_points + [billing]
+    # 4️⃣ TSP Nearest Neighbor (Using Items)
+    unvisited = list(item_coords)
+    order = [entry]
+    current_coord = entry
 
-    # 4️⃣ Compute distance matrix
-    dist_matrix = compute_distance_matrix(grid, nodes)
+    while unvisited:
+        # Find the closest actual item
+        best_item = min(
+            unvisited,
+            key=lambda x: dist_matrix.get((current_coord, x["pickup_point"]), float("inf"))
+        )
+        order.append(best_item)
+        unvisited.remove(best_item)
+        current_coord = best_item["pickup_point"]
 
-    # 5️⃣ Solve order
-    ordered_nodes = tsp_nearest_neighbor(
-        entry,
-        pickup_points,
-        billing,
-        dist_matrix
-    )
+    order.append(billing)
+
+    # 5️⃣ Smooth out the path to remove jumps
+    order = tsp_2opt(order, dist_matrix)
 
     # 6️⃣ Build response (exclude entry & billing)
     optimized_path = []
-
-    for node in ordered_nodes:
-        if node in pickup_map:
-            item = pickup_map[node]
-
-            optimized_path.append({
-                "item_id": item["item_id"],
-                "rack_id": item["rack_id"],
-                "position_index": item["position_index"],
-                "pickup_point": {
-                    "x": node[0],
-                    "y": node[1]
-                }
-            })
+    for item in order[1:-1]:
+        optimized_path.append({
+            "item_id": item["item_id"],
+            "rack_id": item["rack_id"],
+            "position_index": item["position_index"],
+            "pickup_point": {"x": item["pickup_point"][0], "y": item["pickup_point"][1]}
+        })
     
-    print("Optimized order:")
-    for item in optimized_path:
-        print(item["rack_id"], item["pickup_point"])
-
-
-    return optimized_path
+    return optimized_path   

@@ -14,7 +14,7 @@ export const LoginScreen = ({ onNext }: LoginScreenProps) => {
     const interval = setInterval(async () => {
       try {
         const res = await fetch(
-          `http://192.168.2.22:8000/cart/status/${cartId}`
+          `http://10.211.103.220:8000/cart/status/${cartId}`
         );
         const data = await res.json();
 

@@ -5,7 +5,7 @@ import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ReceiptScreen } from "./ReceiptScreen";
 
-const BASE_URL = "http://192.168.2.22:8000";
+const BASE_URL = "http://10.211.103.220:8000";
 
 interface PaymentScreenProps {
   paymentData: {

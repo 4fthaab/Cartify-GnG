@@ -8,7 +8,7 @@ interface ShoppingListScreenProps {
   onBack: () => void;
 }
 
-const API_BASE = "http://192.168.2.22:8000";
+const API_BASE = "http://10.211.103.220:8000";
 
 export function ShoppingListScreen({ onBack }: ShoppingListScreenProps) {
 
@@ -28,7 +28,7 @@ export function ShoppingListScreen({ onBack }: ShoppingListScreenProps) {
 
     const fetchLists = async () => {
       try {
-        const res = await fetch(`${API_BASE}/shopping-list/get/${user.user_id}`);
+        const res = await fetch(`${API_BASE}/shopping-list/get/${user.user_id}?include_empty=true`);
         const data = await res.json();
 
         if (data.shopping_lists) {
@@ -119,7 +119,7 @@ export function ShoppingListScreen({ onBack }: ShoppingListScreenProps) {
   // 🔥 Refresh Lists
   const refreshLists = async () => {
     try {
-      const res = await fetch(`${API_BASE}/shopping-list/get/${user.user_id}`);
+      const res = await fetch(`${API_BASE}/shopping-list/get/${user.user_id}?include_empty=true`);
       const data = await res.json();
 
       if (data.shopping_lists) {

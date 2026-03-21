@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const BASE_URL = "http://192.168.2.22:8000";
+const BASE_URL = "http://10.211.103.220:8000";
 const CART_ID = "CART103";
 const POLL_MS = 2500;
 
@@ -88,36 +88,6 @@ interface AvailableList {
  * The candidate with the highest score wins.
  * Ties are broken by shortest label_variant length (more specific match).
  */
-function bestMatch(query: string, matches: BackendMatch[]): BackendMatch | undefined {
-  const q = query.toLowerCase().trim();
-  if (!q || !matches.length) return undefined;
-
-  let winner: BackendMatch | undefined;
-  let winScore = -1;
-  let winVariantLen = Infinity;
-
-  for (const bm of matches) {
-    const variants = (bm.label_variants ?? []).map(v => v.toLowerCase().trim());
-    const bmName = bm.name.toLowerCase();
-    let score = -1;
-    let matchedLen = Infinity;
-
-    for (const v of variants) {
-      let s = -1;
-      if (v === q) s = 4;            // exact
-      else if (v.startsWith(q) || q.startsWith(v)) s = 3;  // prefix
-      else if (v.includes(q) || q.includes(v)) s = 2;  // substring
-      if (s > score) { score = s; matchedLen = v.length; }
-    }
-    // Fallback: item name substring
-    if (score < 1 && bmName.includes(q)) { score = 1; matchedLen = bmName.length; }
-
-    if (score > winScore || (score === winScore && matchedLen < winVariantLen)) {
-      winScore = score; winVariantLen = matchedLen; winner = bm;
-    }
-  }
-  return winScore >= 1 ? winner : undefined;
-}
 
 /** Rack badge label: uses rack_name from API if available, else RACK_NAME fallback */
 function rackBadge(rackId: string, positionIndex?: number, rackName?: string): string {
@@ -128,21 +98,23 @@ function rackBadge(rackId: string, positionIndex?: number, rackName?: string): s
 // ─── Store Map Minimap ─────────────────────────────────────────────────────────
 
 const StoreMinimap = ({
-  listItems, backendMatches, nearbyRacks, cartLocation,
+  enrichedItems, // <-- Changed from listItems & backendMatches
+  nearbyRacks,
+  cartLocation,
 }: {
-  listItems: ListItem[];
-  backendMatches: BackendMatch[];
+  enrichedItems: any[]; // <-- New prop
   nearbyRacks: string[];
   cartLocation?: CurrentLocation;
 }) => {
-  // Count pending / bought items per rack
+  // Count pending / bought items per rack using the pre-matched data
   const rackCounts = new Map<string, { pending: number; bought: number }>();
-  for (const li of listItems) {
-    const bm = bestMatch(li.name, backendMatches);
-    if (!bm) continue;
-    const c = rackCounts.get(bm.rack_id) ?? { pending: 0, bought: 0 };
-    if (li.bought) c.bought++; else c.pending++;
-    rackCounts.set(bm.rack_id, c);
+
+  for (const item of enrichedItems) {
+    if (!item.rack_id) continue; // Skip if item wasn't matched to a rack
+
+    const c = rackCounts.get(item.rack_id) ?? { pending: 0, bought: 0 };
+    if (item.bought) c.bought++; else c.pending++;
+    rackCounts.set(item.rack_id, c);
   }
 
   const CELL = 22; // px per grid cell
@@ -377,9 +349,16 @@ const CheckoutModal = ({
 
 // ─── Main Interface ─────────────────────────────────────────────────────────────
 
-interface MainInterfaceProps { onBack: () => void; onCheckout: (items: CartItem[], total: number) => void; }
+interface MainInterfaceProps {
+  onBack: () => void;
+  onRouteReady?: () => void;
+  onCheckout: (items: CartItem[], total: number) => void;
+  isPollingPaused?: boolean;
+  recentlyAddedItem?: string | null;
+  clearRecentlyAdded?: () => void;
+}
 
-export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
+export const MainInterface = ({ onBack, onRouteReady, onCheckout, recentlyAddedItem, clearRecentlyAdded, isPollingPaused = false }: MainInterfaceProps) => {
   const [userId, setUserId] = useState<string | null>(null);
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [pendingListId, setPendingListId] = useState<string | null>(null);
@@ -391,6 +370,9 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
   const [selectingList, setSelectingList] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [offers, setOffers] = useState<any[]>([]);
+  const [optimizedPath, setOptimizedPath] = useState<any[]>([]);
+  const [backendMatchedItems, setBackendMatchedItems] = useState<any[]>([]);
+  const itemRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   // ── Read user_id from localStorage (set by LoginScreen)
   useEffect(() => {
@@ -401,37 +383,77 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
   }, []);
 
   // ── Poll /cart/display every POLL_MS — single source of truth
-  // ── Poll /cart/display every POLL_MS — single source of truth
   const pollCart = useCallback(async () => {
+    if (isPollingPaused) return; // <-- ADD EARLY RETURN
+
     try {
-      const res = await fetch(`${BASE_URL}/cart/display/${CART_ID}`);
+      const res = await fetch(`${BASE_URL}/cart/display/${CART_ID}`, { cache: "no-store" });
       if (!res.ok) return;
       const data: CartDisplay = await res.json();
       if ((data as any).error) return;
+
+      // 🚨 --- NEW LOGIC: Detect Remote Logout & Force Reload --- 🚨
+      const localSession = localStorage.getItem("cart_user");
+
+      if (localSession && !data.linked_user_id) {
+        console.log("Remote logout detected! Resetting cart UI...");
+        localStorage.removeItem("cart_user");
+        window.location.reload();
+        return;
+      }
+
+      // Update the main display state
       setCartDisplay(data);
 
-      // --- NEW FIX: Auto-sync User ID from backend polling ---
+      // --- Auto-sync User ID ---
       if (data.linked_user_id) {
         setUserId(prev => {
           if (prev !== data.linked_user_id) {
-            // Save it so it persists, and returning it triggers fetchLists() automatically!
             localStorage.setItem("cart_user", JSON.stringify({ user_id: data.linked_user_id }));
             return data.linked_user_id;
           }
           return prev;
         });
+      } else {
+        setUserId(null);
+        setAvailableLists([]);
       }
 
-      // Auto-enter list view if cart already has a linked list
-      if (data.linked_list_id) setSelectedListId(id => id ?? data.linked_list_id!);
-    } catch { /* silent */ }
-  }, []);
+      // --- Auto-sync List ID ---
+      if (data.linked_list_id) {
+        setSelectedListId(data.linked_list_id);
+      } else {
+        // FIX: Do not overwrite the local state if the user explicitly chose a guest/no-list session!
+        setSelectedListId((prev) => {
+          if (prev === 'guest_session' || prev === 'no_list_session') {
+            return prev;
+          }
+          return null;
+        });
+      }
+    } catch {
+      /* silent */
+    }
+  }, [isPollingPaused]);
 
   useEffect(() => {
     pollCart();
     const id = setInterval(pollCart, POLL_MS);
     return () => clearInterval(id);
   }, [pollCart]);
+
+  useEffect(() => {
+    if (recentlyAddedItem && itemRefs.current[recentlyAddedItem]) {
+      // Smoothly scroll the list so the new item is exactly in the center
+      itemRefs.current[recentlyAddedItem]?.scrollIntoView({ behavior: "smooth", block: "center" });
+
+      // Remove the glow after 2.5 seconds
+      const timer = setTimeout(() => {
+        if (clearRecentlyAdded) clearRecentlyAdded();
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [recentlyAddedItem, cartDisplay]);
 
   useEffect(() => {
     const fetchOffers = async () => {
@@ -455,7 +477,7 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setAvailableLists((data.shopping_lists ?? []).filter((l: AvailableList) => l.status !== "completed"));
-    } catch (e: any) {
+    } catch (e) {
       setError(e.message ?? "Failed to load lists");
     } finally { setLoadingLists(false); }
   }, [userId]);
@@ -464,26 +486,93 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
 
   // ── Link list to cart (two-step: preview → confirm)
   const handleSelectList = (listId: string) => {
-    // Just show the preview; do NOT call API yet
     setPendingListId(listId);
   };
 
   const handleConfirmList = async () => {
-    if (!pendingListId || !userId) return;
-    setSelectingList(pendingListId); setError(null);
+    if (!pendingListId || !userId || !cartDisplay?.store_id) return;
+    setSelectingList(pendingListId);
+    setError(null);
+
     try {
+      // 1. Confirm the list with the backend
       const res = await fetch(`${BASE_URL}/cart/confirm-list`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: userId, list_id: pendingListId, cart_id: CART_ID }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      setSelectedListId(pendingListId); setPendingListId(null); setShowCart(false);
+
+      // 2. Poll for the Optimized Path BEFORE navigating
+      let pathReady = false;
+      while (!pathReady) {
+        try {
+          const pathRes = await fetch(`${BASE_URL}/path/generate`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              user_id: userId,
+              store_id: cartDisplay.store_id,
+              list_id: pendingListId
+            }),
+          });
+          const pathData = await pathRes.json();
+
+          if (pathData.optimized_path && pathData.optimized_path.length > 0) {
+            setOptimizedPath(pathData.optimized_path);
+            setBackendMatchedItems(pathData.matched_items || []);
+            pathReady = true; // Break the loop!
+          } else {
+            // Wait 1 second and check again
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        } catch (e) {
+          // If the path fetch errors, just wait and retry
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      // 3. Finalize UI State
+      setSelectedListId(pendingListId);
+      setPendingListId(null);
+      setShowCart(false);
       await pollCart();
+
+      // 4. Slide to the Minimap!
+      if (onRouteReady) onRouteReady();
+
     } catch (e: any) {
       setError(e.message ?? "Failed to confirm list");
-    } finally { setSelectingList(null); }
+    } finally {
+      setSelectingList(null);
+    }
   };
+
+  useEffect(() => {
+    if (selectedListId && userId && cartDisplay?.store_id) {
+      const fetchOptimizedPath = async () => {
+        try {
+          const res = await fetch(`${BASE_URL}/path/generate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              user_id: userId,
+              store_id: cartDisplay.store_id,
+              list_id: selectedListId
+            }),
+          });
+          const data = await res.json();
+          if (data.optimized_path) {
+            setOptimizedPath(data.optimized_path);
+            setBackendMatchedItems(data.matched_items || []);
+          }
+        } catch (e) {
+          console.error("Failed to generate optimized path:", e);
+        }
+      };
+
+      fetchOptimizedPath();
+    }
+  }, [selectedListId, userId, cartDisplay?.store_id]);
 
   // ── Checkout — just navigate to BillingScreen; actual /cart/checkout is called
   // from PaymentScreen once the user has selected a payment method.
@@ -502,11 +591,72 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
   const nearbyRacks = cartDisplay?.current_location?.nearby_racks ?? [];
   const cartLocation = cartDisplay?.current_location;
 
-  // Enrich list items with matched rack info (uses scored bestMatch)
+  // ── Build Enriched Items and Sort via A* Path ──
+  const activePath = (cartDisplay?.optimized_path && cartDisplay.optimized_path.length > 0)
+    ? cartDisplay.optimized_path
+    : optimizedPath;
+
+  const orderMap = new Map(activePath.map((op, index) => [op.item_id, index]));
+
   const enrichedItems = rawListItems.map(li => {
-    const bm = bestMatch(li.name, backendMatches);
-    return { ...li, rack_id: bm?.rack_id, rack_name: bm?.rack_name, position_index: bm?.position_index };
+
+    // FIX 2: Always prioritize the live backend_matches from the polling over the local state!
+    const matchesToUse = (cartDisplay?.backend_matches && cartDisplay.backend_matches.length > 0)
+      ? cartDisplay.backend_matches
+      : backendMatchedItems;
+
+    const q = li.name.toLowerCase().trim();
+
+    let bestMatch = null;
+    let bestScore = -1;
+
+    // Use a localized scoring system to link the user's string to the backend's item
+    for (const bmi of matchesToUse) {
+      const n = bmi.name?.toLowerCase().trim() || "";
+      const oq = bmi.original_query?.toLowerCase().trim() || "";
+
+      // NEW: Filter out empty strings to prevent the .includes("") bug!
+      const variants = (bmi.label_variants || [])
+        .map((v: string) => v.toLowerCase().trim())
+        .filter((v: string) => v.length > 0);
+
+      let score = -1;
+
+      // 1. Exact match (Highest Priority)
+      if (n === q || oq === q || variants.includes(q)) {
+        score = 3;
+      }
+      // 2. Prefix match
+      else if (variants.some((v: string) => v.startsWith(q) || q.startsWith(v))) {
+        score = 2;
+      }
+      // 3. Substring match
+      else if (n.includes(q) || q.includes(n) || variants.some((v: string) => v.includes(q) || q.includes(v))) {
+        score = 1;
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = bmi;
+      }
+    }
+
+    return {
+      ...li,
+      item_id: bestMatch?.item_id,
+      rack_id: bestMatch?.rack_id,
+      rack_name: bestMatch?.rack_name,
+      position_index: bestMatch?.position_index
+    };
   });
+
+  if (activePath.length > 0) {
+    enrichedItems.sort((a, b) => {
+      const indexA = a.item_id && orderMap.has(a.item_id) ? orderMap.get(a.item_id)! : 9999;
+      const indexB = b.item_id && orderMap.has(b.item_id) ? orderMap.get(b.item_id)! : 9999;
+      return indexA - indexB;
+    });
+  }
 
   return (
     <>
@@ -530,8 +680,7 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
           </h3>
           <div className="flex-1 bg-white rounded-xl shadow-lg p-3 overflow-auto">
             <StoreMinimap
-              listItems={rawListItems}
-              backendMatches={backendMatches}
+              enrichedItems={enrichedItems} // <-- Updated
               nearbyRacks={nearbyRacks}
               cartLocation={cartLocation}
             />
@@ -637,7 +786,7 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
                       {availableLists.map(list => (
                         <button key={list.list_id} onClick={() => handleSelectList(list.list_id)}
                           disabled={!!selectingList}
-                          className="w-full bg-slate-50 border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all duration-300 rounded-2xl p-5 flex items-center justify-between text-left group disabled:opacity-60">
+                          className="w-full bg-slate-50 border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all duration-100 rounded-2xl p-5 flex items-center justify-between text-left group disabled:opacity-60">
                           <div>
                             <h3 className="text-xl font-bold text-slate-800 group-hover:text-blue-700 transition-colors">{list.list_name}</h3>
                             <div className="flex items-center gap-3 mt-2 text-sm text-slate-500">
@@ -665,12 +814,7 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
           ) : (
             /* ── View 2: Active Shopping / Cart ── */
             <>
-              <div className="flex items-center justify-between mb-6">
-                <button onClick={() => setSelectedListId(null)}
-                  className="text-slate-500 hover:text-slate-800 flex items-center gap-1 font-medium bg-slate-100 px-3 py-2 rounded-lg hover:bg-slate-200 transition-colors">
-                  <ChevronLeft className="h-4 w-4" />Back
-                </button>
-
+              <div className="flex items-center justify-evenly mb-6">
                 <div className="flex items-center justify-center gap-4">
                   <button onClick={() => setShowCart(false)}
                     className={cn("px-8 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2",
@@ -684,12 +828,6 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
                         : "bg-slate-200 text-slate-600 hover:bg-slate-300")}>
                     <ShoppingCart className="h-5 w-5" />Cart ({cartItems.length})
                   </button>
-                </div>
-
-                <div className="w-[120px] text-right">
-                  {cartDisplay?.list_name && (
-                    <span className="text-xs text-slate-400 truncate block">{cartDisplay.list_name}</span>
-                  )}
                 </div>
               </div>
 
@@ -730,30 +868,37 @@ export const MainInterface = ({ onBack, onCheckout }: MainInterfaceProps) => {
                         <List className="h-12 w-12 mx-auto mb-3 opacity-30" />
                         <p>No items in this list.</p>
                       </div>
-                    ) : enrichedItems.map((item, idx) => (
-                      <div key={idx}
-                        className={cn(
-                          "bg-gradient-to-r from-slate-50 to-slate-100 p-4 rounded-xl border-2 border-slate-200 hover:scale-[1.02] transition-all duration-300 flex items-center justify-between gap-3",
-                          item.bought && "opacity-60"
-                        )}>
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <span className={cn("font-semibold text-slate-800 capitalize flex-1", item.bought && "line-through text-slate-400")}>
-                            {item.name}
-                          </span>
-                          {/* Rack badge — uses friendly name from API (rack_name) or RACK_NAME fallback */}
-                          {item.rack_id && (
-                            <span className="shrink-0 text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-semibold whitespace-nowrap">
-                              {rackBadge(item.rack_id, item.position_index, item.rack_name)}
+                    ) : enrichedItems.map((item, idx) => {
+                      const isRecentlyAdded = recentlyAddedItem === item.name; // <-- Check if it's the new item!
+                      return (
+                        <div key={idx}
+                          ref={(el) => (itemRefs.current[item.name] = el)} // <-- Attach the ref!
+                          className={cn(
+                            "p-4 rounded-xl border-2 transition-all duration-500 flex items-center justify-between gap-3",
+                            item.bought ? "bg-gradient-to-r from-slate-50 to-slate-100 border-slate-200 opacity-60" :
+                              isRecentlyAdded ? "bg-green-50 border-green-400 shadow-[0_0_20px_rgba(74,222,128,0.4)] scale-[1.02] z-10 relative" :
+                                "bg-gradient-to-r from-slate-50 to-slate-100 border-slate-200 hover:scale-[1.02]"
+                          )}>
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+
+                            <span className={cn("font-semibold text-slate-800 capitalize flex-1", item.bought && "line-through text-slate-400")}>
+                              {item.name}
                             </span>
+
+                            {item.rack_id && (
+                              <span className="shrink-0 text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-semibold whitespace-nowrap">
+                                {rackBadge(item.rack_id, item.position_index, item.rack_name)}
+                              </span>
+                            )}
+                          </div>
+                          {item.bought && (
+                            <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center shrink-0">
+                              <span className="text-white text-xs">✓</span>
+                            </div>
                           )}
                         </div>
-                        {item.bought && (
-                          <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center shrink-0">
-                            <span className="text-white text-xs">✓</span>
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

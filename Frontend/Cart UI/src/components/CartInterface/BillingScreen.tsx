@@ -3,14 +3,14 @@ import { ArrowLeft, CheckCircle2, Wallet, Receipt, ShoppingCart, Loader2 } from 
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 
-const BASE_URL = "http://192.168.2.22:8000";
+const BASE_URL = "http://10.211.103.220:8000";
 const CART_ID = "CART103";
 
 interface BillingScreenProps {
   cartItems: any[];        // <-- Receive items from parent
   totalAmount: number;     // <-- Receive total from parent
   onBack: () => void;
-  onDone: (paymentData: { payment_id: string; amount: number; order_id: string; qr_payload: string; method:string; }) => void;
+  onDone: (paymentData: { payment_id: string; amount: number; order_id: string; qr_payload: string; method: string; }) => void;
 }
 
 export const BillingScreen = ({ cartItems, totalAmount, onBack, onDone }: BillingScreenProps) => {

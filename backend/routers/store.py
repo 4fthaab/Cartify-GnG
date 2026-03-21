@@ -32,3 +32,17 @@ def get_store_layout(store_id: str):
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Layout for store {store_id} not found")
     return layout
+
+@router.get("/items/{store_id}")
+def get_store_items(store_id: str):
+    """
+    Fetch all active items for a specific store to power the frontend search.
+    """
+    db = get_db()
+    # Fetch items, excluding the MongoDB ObjectId for JSON serialization
+    items = list(db["items"].find({"store_id": store_id, "is_active": True}, {"_id": 0}))
+    
+    if not items:
+        return {"items": []}
+        
+    return {"items": items}

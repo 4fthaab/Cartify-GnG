@@ -13,7 +13,7 @@ interface HomeScreenProps {
   isCartLinked: boolean;
 }
 
-const API_BASE = "http://192.168.2.22:8000";
+const API_BASE = "http://10.211.103.220:8000";
 
 export function HomeScreen({ onNavigate, cartItems, isDarkMode, onToggleTheme, isCartLinked }: HomeScreenProps) {
   const storedUser = JSON.parse(localStorage.getItem("user") || "null");
@@ -47,39 +47,37 @@ export function HomeScreen({ onNavigate, cartItems, isDarkMode, onToggleTheme, i
   }, []);
 
   // ── Logout Logic ────────────────────────────────────────────────
+// ── Logout Logic ────────────────────────────────────────────────
   const handleLogout = async () => {
     const cartSession = JSON.parse(localStorage.getItem("cart_session") || "{}");
 
-    // 1. If a cart is linked, log out of it on the backend
+    // 1. If a cart is linked, attempt to log out of it on the backend
     if (cartSession.cart_id) {
       try {
-        await fetch(`${API_BASE}/cart/logout`, {
+        const res = await fetch(`${API_BASE}/cart/logout`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cart_id: cartSession.cart_id }) //
+          body: JSON.stringify({ cart_id: cartSession.cart_id })
         });
+        const data = await res.json();
+
+        // 🚨 NEW: Abort logout if the backend rejects it (e.g., items in cart)
+        if (data.error) {
+          alert(data.error);
+          return; // Stop the logout process here
+        }
       } catch (err) {
         console.error("Failed to logout cart on backend", err);
-      }
-    }
-    else {
-      try {
-        await fetch(`${API_BASE}/cart/logout`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cart_id: cartSession.cart_id }) //
-        });
-      } catch (err) {
-        console.error("Failed to logout cart on backend", err);
+        alert("Network error. Please try again.");
+        return; // Don't force logout if we can't verify cart state
       }
     }
 
-    // 2. Clear local storage to reset user state
+    // 2. Clear local storage to reset user state (Only happens if API succeeds or no cart linked)
     localStorage.removeItem("user");
     localStorage.removeItem("cart_session");
 
-    // 3. Navigate back to Splash Screen instead of Login directly
-    // This will show the "Cartify" intro animation again
+    // 3. Navigate back to Splash Screen
     onNavigate('splash');
   };
 

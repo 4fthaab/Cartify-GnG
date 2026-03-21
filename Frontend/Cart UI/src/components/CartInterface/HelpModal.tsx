@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { HelpCircle, X, AlertTriangle, Send, Loader2, CheckCircle2 } from "lucide-react";
 
-const BASE_URL = "http://192.168.2.22:8000";
+const BASE_URL = "http://10.211.103.220:8000";
 
 export const HelpModal = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -57,7 +57,7 @@ export const HelpModal = () => {
       {isOpen && (
         <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsOpen(false)}>
           <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-            
+
             <div className="bg-slate-800 p-5 flex justify-between items-center text-white">
               <div className="flex items-center gap-2 font-bold text-lg">
                 <AlertTriangle className="h-5 w-5 text-amber-400" />

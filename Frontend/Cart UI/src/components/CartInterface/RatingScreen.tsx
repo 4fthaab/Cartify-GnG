@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Star, MessageSquareHeart, Loader2, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const BASE_URL = "http://192.168.2.22:8000";
+const BASE_URL = "http://10.211.103.220:8000";
 const CART_ID = "CART103";
 const STORE_ID = "STORE001";
 
@@ -22,7 +22,7 @@ export const RatingScreen = ({ onDone }: RatingScreenProps) => {
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
-    
+
     const raw = localStorage.getItem("cart_user");
     const userId = raw ? JSON.parse(raw)?.user_id : "GUEST";
 

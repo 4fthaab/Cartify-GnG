@@ -3,7 +3,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { useState } from 'react';
 
-const API_BASE = "http://192.168.2.22:8000";
+const API_BASE = "http://10.211.103.220:8000";
 
 interface QRLoginScreenProps {
   onLogin: (user: any) => void;

@@ -21,7 +21,9 @@ const Index = () => {
   const [currentScreen, setCurrentScreen] = useState(0);
   const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
   const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [recentlyAddedItem, setRecentlyAddedItem] = useState<string | null>(null);
   const [checkoutData, setCheckoutData] = useState<{ items: any[], total: number }>({ items: [], total: 0 });
+  
   const resetInactivity = useCallback(() => {
     // Only care about billing/payment/receipt/rating screens
     if (currentScreen < 3) return;
@@ -55,15 +57,27 @@ const Index = () => {
         style={{ transform: `translateX(-${currentScreen * 100}%)` }}
       >
         <div className="min-w-full h-full"><LoginScreen onNext={() => goTo(2)} /></div>
-        <div className="min-w-full h-full"><MinimapSearch onNext={() => goTo(2)} onLogout={() => goTo(0)} /></div>
+        {/* Screen 1 – Minimap/Search */}
+        <div className="min-w-full h-full">
+          <MinimapSearch 
+            onNext={(itemName?: string) => { 
+              if (itemName) setRecentlyAddedItem(itemName);
+              goTo(2); 
+            }} 
+          />
+        </div>
         {/* Screen 2 – Main Shopping Interface */}
         <div className="min-w-full h-full">
           <MainInterface
             onBack={() => goTo(1)}
+            onRouteReady={() => goTo(1)}
+            recentlyAddedItem={recentlyAddedItem}                  // <-- Pass it down
+            clearRecentlyAdded={() => setRecentlyAddedItem(null)}
             onCheckout={(items, total) => {
               setCheckoutData({ items, total }); // <-- Save the items here
               goTo(3);
             }}
+            isPollingPaused={currentScreen >= 3}
           />
         </div>
 

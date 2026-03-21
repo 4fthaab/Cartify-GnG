@@ -360,17 +360,20 @@ def delete_shopping_list(payload: dict):
 
 # 🧩 FETCH USER LISTS (sorted by most recent first)
 @router.get("/get/{user_id}")
-def get_user_lists(user_id: str):
+def get_user_lists(user_id: str, include_empty: bool = False):
     db = get_db()
     user = db["users"].find_one({"user_id": user_id})
     if not user:
         return {"error": "Invalid user_id"}
 
-    # BULLETPROOF: "items.0: exists" guarantees the array has at least 1 item
+    # Base query
+    query = {"user_id": user_id}
+    
+    # If false (Cart UI default), strictly require at least 1 item
+    if not include_empty:
+        query["items.0"] = {"$exists": True}
+
     lists = list(
-        db["shopping_lists"].find({
-            "user_id": user_id,
-            "items.0": {"$exists": True} 
-        }, {"_id": 0}).sort("created_at", -1)
+        db["shopping_lists"].find(query, {"_id": 0}).sort("created_at", -1)
     )
     return {"shopping_lists": lists}

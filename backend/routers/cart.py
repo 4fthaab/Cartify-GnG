@@ -127,14 +127,13 @@ def get_cart_session(cart_id: str):
 @router.post("/event")
 def cart_event(payload: dict):
     """
-    Hardware sends atomic event:
     {
         "cart_id": "CART103",
         "event_type": "add" | "remove",
-        "detected_label": "Brush",
+        "detected_label": "Orange",
         "camera_confidence": 0.93,
-        "weight_delta_g": 52,
-        "cart_total_weight_g": 1250
+        "weight_delta_g": 500,
+        "cart_total_weight_g": 500
     }
     """
     db = get_db()
@@ -764,6 +763,14 @@ def cart_logout(payload: dict):
 
     if not cart_id:
         return {"error": "cart_id required"}
+    
+    cart = db["carts"].find_one({"cart_id": cart_id})
+    if not cart:
+        return {"error": "Cart not found"}
+
+    # 🚨 NEW: Prevent logout if cart has items and isn't checked out
+    if cart.get("total_items", 0) > 0 and not cart.get("checked_out", False):
+        return {"error": "Cannot logout. Please empty your physical cart or complete checkout first."}
 
     # 🧹 Fields to remove completely
     fields_to_unset = {
