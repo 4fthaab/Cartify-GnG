@@ -40,7 +40,7 @@ export const ReceiptScreen = ({
         <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
           {items.map((item, idx) => (
             <div key={idx} className="flex justify-between text-sm">
-              <span>{item.name} ({item.quantity})</span>
+              <span>{item.name}</span>
               <span>₹ {item.price.toFixed(2)}</span>
             </div>
           ))}

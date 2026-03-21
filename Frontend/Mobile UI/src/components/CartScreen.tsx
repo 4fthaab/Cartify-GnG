@@ -241,7 +241,7 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked 
 
   if (isScanning) {
     return (
-      <div className="h-full w-full flex flex-col bg-background">
+      <div className="h-full w-screen flex flex-col bg-background">
         <div className="flex items-center gap-4 px-6 py-4 border-b border-border shrink-0">
           <button onClick={onBack} className="w-10 h-10 bg-accent rounded-full flex items-center justify-center border border-border">
             <ArrowLeft className="w-5 h-5" />
@@ -254,7 +254,7 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked 
 
         <div className="flex-1 flex flex-col items-center justify-between px-6 py-4">
           <div className="text-center mb-4">
-            <div className="w-12 h-20 bg-[#FF3347] rounded-xl flex items-center justify-center mx-auto mb-5">
+            <div className="w-14 h-20 bg-[#FF3347] rounded-xl flex items-center justify-center mx-auto mb-5">
               <Scan className="w-10 h-10 text-white" />
             </div>
             <h3 className="text-xl font-semibold text-foreground">Scan Cart QR Code</h3>
@@ -263,7 +263,7 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked 
             </p>
           </div>
 
-          <div className="relative w-full overflow-hidden rounded-3xl" style={{ height: "300px" }}>
+          <div className="relative w-full overflow-hidden rounded-3xl">
             <div id="qr-reader" className="w-full h-full object-cover" />
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
               <div className="w-48 h-48 border-2 border-[#FF3347]/50 rounded-xl relative">
@@ -300,7 +300,7 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked 
             <p className="text-3xl font-bold mt-1">₹{paymentSession?.amount?.toFixed(2) ?? "..."}</p>
           </div>
 
-          <div className="relative w-full overflow-hidden rounded-3xl" style={{ height: "300px" }}>
+          <div className="relative w-full overflow-hidden rounded-3xl">
             <div id="payment-qr-reader" className="w-full h-full object-cover bg-gray-100" />
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
               <div className="w-48 h-48 border-2 border-green-500/50 rounded-xl relative">

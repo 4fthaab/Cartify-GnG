@@ -101,13 +101,26 @@ def update_shopping_list(payload: dict = Body(...)):
     if len(new_items) > 0:
         timestamp = int(datetime.utcnow().timestamp())
         new_list_id = f"{user_id}_L{timestamp}"
+        
+        # --- NEW NAMING LOGIC ---
+        current_name = shopping_list.get('list_name', 'My List').strip()
+        
+        # If the string ends with "(Next)", slice off the last 6 characters
+        if current_name.endswith("(Next)"):
+            base_name = current_name[:-6].strip()
+        else:
+            base_name = current_name
+            
+        new_list_name = f"{base_name} (Next)"
+        # ------------------------
+
         new_list_doc = {
             "user_id": user_id,
             "list_id": new_list_id,
             "items": new_items,
             "created_at": datetime.utcnow().isoformat(),
             "status": "pending",
-            "list_name": f"{shopping_list.get('list_name', 'My List')} (Next)"
+            "list_name": new_list_name
         }
         db["shopping_lists"].insert_one(new_list_doc)
         

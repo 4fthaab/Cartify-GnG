@@ -56,7 +56,12 @@ const Index = () => {
         className="flex h-full transition-transform duration-700 ease-in-out"
         style={{ transform: `translateX(-${currentScreen * 100}%)` }}
       >
-        <div className="min-w-full h-full"><LoginScreen onNext={() => goTo(2)} /></div>
+        <div className="min-w-full h-full">
+          <LoginScreen 
+             isActive={currentScreen === 0}
+             onNext={() => goTo(2)} 
+          />
+        </div>
         {/* Screen 1 – Minimap/Search */}
         <div className="min-w-full h-full">
           <MinimapSearch 

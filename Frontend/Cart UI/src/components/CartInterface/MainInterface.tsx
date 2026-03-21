@@ -11,42 +11,58 @@ const BASE_URL = "http://10.211.103.220:8000";
 const CART_ID = "CART103";
 const POLL_MS = 2500;
 
-// ─── Store Layout (embedded from ST001.json) ───────────────────────────────────
-// Rack id → friendly display name lookup (fallback if backend doesn't return rack_name)
-const RACK_NAME: Record<string, string> = {
-  "str001r01": "R1 Fruits",
-  "str001r02": "R2 Vegetables",
-  "str001r03": "R3 Cooking Essentials",
-  "str001r04": "R4 Grains and Pulses",
-  "str001r05": "R5 Snacks & Bakery",
-  "str001r06": "R6 Dairy & Beverages",
-  "str001r07": "R7 Frozen & Meat 2",
-  "str001r08": "R9 Personal Care",
-  "str001r09": "R10 Household Cleaning",
-  "str001r10": "R8 Frozen & Meat 1",
-};
+// ─── Utility: BFS Pathfinding (Walkable Grid) ────────────────────────────────
+function findWalkablePath(layout: any, points: { x: number; y: number }[]) {
+  if (!layout || !points || points.length < 2) return [];
 
-interface StoreRackDef {
-  rack_id: string; label: string; color: string;
-  x: number; y: number; w: number; h: number;
-  orientation: "vertical" | "horizontal";
+  const cols = layout.floor_area.length_ft / layout.floor_area.feet_per_cell;
+  const rows = layout.floor_area.width_ft / layout.floor_area.feet_per_cell;
+  const grid = Array.from({ length: rows }, () => Array(cols).fill(1));
+
+  layout.elements.forEach((el: any) => {
+    if (el.type === "rack" || (el.type === "blocked" && ["wall", "restricted"].includes(el.zoneType))) {
+      for (let dy = 0; dy < (el.h || 1); dy++) {
+        for (let dx = 0; dx < (el.w || 1); dx++) {
+          if (grid[el.y + dy] && grid[el.y + dy][el.x + dx] !== undefined) {
+            grid[el.y + dy][el.x + dx] = 0;
+          }
+        }
+      }
+    }
+  });
+
+  const bfs = (start: { x: number; y: number }, goal: { x: number; y: number }) => {
+    const queue = [[start]];
+    const visited = new Set([`${Math.round(start.x)},${Math.round(start.y)}`]);
+    const dirs = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+
+    while (queue.length > 0) {
+      const path = queue.shift()!;
+      const curr = path[path.length - 1];
+
+      if (curr.x === goal.x && curr.y === goal.y) return path;
+
+      for (const [dx, dy] of dirs) {
+        const nx = curr.x + dx, ny = curr.y + dy;
+        if (nx >= 0 && nx < cols && ny >= 0 && ny < rows && grid[ny][nx] === 1 && !visited.has(`${nx},${ny}`)) {
+          visited.add(`${nx},${ny}`);
+          queue.push([...path, { x: nx, y: ny }]);
+        }
+      }
+    }
+    return [start, goal];
+  };
+
+  let fullPath: { x: number; y: number }[] = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const segment = bfs(
+      { x: Math.round(points[i].x), y: Math.round(points[i].y) },
+      { x: Math.round(points[i + 1].x), y: Math.round(points[i + 1].y) }
+    );
+    fullPath = fullPath.concat(i === 0 ? segment : segment.slice(1));
+  }
+  return fullPath;
 }
-
-const STORE_RACKS: StoreRackDef[] = [
-  { rack_id: "str001r01", label: "Fruits", color: "#d6b129", x: 1, y: 1, w: 1, h: 8, orientation: "vertical" },
-  { rack_id: "str001r02", label: "Vegetables", color: "#70c021", x: 3, y: 1, w: 1, h: 8, orientation: "vertical" },
-  { rack_id: "str001r03", label: "Cooking", color: "#FEE2E2", x: 5, y: 4, w: 15, h: 1, orientation: "horizontal" },
-  { rack_id: "str001r04", label: "Grains", color: "#439ecb", x: 5, y: 2, w: 15, h: 1, orientation: "horizontal" },
-  { rack_id: "str001r05", label: "Snacks", color: "#eebf58", x: 5, y: 5, w: 7, h: 1, orientation: "horizontal" },
-  { rack_id: "str001r06", label: "Dairy & Bev", color: "#76c0f9", x: 5, y: 7, w: 7, h: 1, orientation: "horizontal" },
-  { rack_id: "str001r07", label: "Frozen/Meat", color: "#75ffdd", x: 13, y: 7, w: 7, h: 1, orientation: "horizontal" },
-  { rack_id: "str001r08", label: "Personal Care", color: "#732edc", x: 21, y: 1, w: 1, h: 8, orientation: "vertical" },
-  { rack_id: "str001r09", label: "HH Cleaning", color: "#c6b9b9", x: 23, y: 1, w: 1, h: 8, orientation: "vertical" },
-  { rack_id: "str001r10", label: "Frozen/Meat 2", color: "#67fcfe", x: 13, y: 5, w: 7, h: 1, orientation: "horizontal" },
-];
-
-const GRID_W = 25;
-const GRID_H = 10;
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -59,7 +75,14 @@ interface BackendMatch {
   weight_type: string; weight_g?: number; label_variants: string[];
 }
 
-interface CurrentLocation { x: number; y: number; marker_id: number; nearby_racks: string[]; }
+interface CurrentLocation {
+  x: number;
+  y: number;
+  marker_id?: number;
+  rack_id?: string;
+  nearby_racks?: string[];
+  source?: string;
+}
 
 interface CartDisplay {
   cart_id: string; store_id: string; status: string;
@@ -75,181 +98,212 @@ interface AvailableList {
   items: { name: string; bought?: boolean }[]; status: string;
 }
 
-// ─── Rack matching (scored, exact-first) ───────────────────────────────────────
-/**
- * Returns the best BackendMatch for a shopping-list item name.
- *
- * Score priority:
- *   4 – exact label_variant match          ("savala" === "savala")
- *   3 – label_variant starts-with query    ("paal" in "paal whole milk")
- *   2 – query contained in a variant       ("juice" in "orange juice")
- *   1 – item.name contains query           ("juice" in "orange juice 1l")
- *
- * The candidate with the highest score wins.
- * Ties are broken by shortest label_variant length (more specific match).
- */
-
-/** Rack badge label: uses rack_name from API if available, else RACK_NAME fallback */
-function rackBadge(rackId: string, positionIndex?: number, rackName?: string): string {
-  const name = rackName ?? RACK_NAME[rackId] ?? rackId;
-  return positionIndex != null ? `${name} · ${positionIndex}` : name;
-}
-
-// ─── Store Map Minimap ─────────────────────────────────────────────────────────
-
-const StoreMinimap = ({
-  enrichedItems, // <-- Changed from listItems & backendMatches
-  nearbyRacks,
+// ─── Store POV Map (Dynamic Database Camera & True POV) ──────────────────────
+const POVStoreMap = ({
+  layout,
+  activePath,
+  scannedItemIds,
+  povState,
   cartLocation,
 }: {
-  enrichedItems: any[]; // <-- New prop
-  nearbyRacks: string[];
+  layout: any;
+  activePath: any[];
+  scannedItemIds: Set<string>;
+  povState: { racks: string[]; isHorizontal: boolean };
   cartLocation?: CurrentLocation;
 }) => {
-  // Count pending / bought items per rack using the pre-matched data
-  const rackCounts = new Map<string, { pending: number; bought: number }>();
+  // Wait for the dynamic layout from the DB
+  if (!layout) return <div className="h-full flex items-center justify-center text-slate-400 animate-pulse">Loading Dynamic Map...</div>;
 
-  for (const item of enrichedItems) {
-    if (!item.rack_id) continue; // Skip if item wasn't matched to a rack
+  const CELL = 40;
+  const { racks, isHorizontal } = povState;
 
-    const c = rackCounts.get(item.rack_id) ?? { pending: 0, bought: 0 };
-    if (item.bought) c.bought++; else c.pending++;
-    rackCounts.set(item.rack_id, c);
+  // 1. Compute Path (Filter out items already scanned)
+  const pendingOptimizedPath = activePath.filter((op: any) => !scannedItemIds.has(op.item_id));
+
+  const entryNode = layout.elements.find((e: any) => e.zoneType === "entry");
+  const billingNode = layout.elements.find((e: any) => e.zoneType === "billing");
+
+  const effectiveCartLocation = cartLocation
+    ? { x: Math.round(cartLocation.x), y: Math.round(cartLocation.y) }
+    : (entryNode ? { x: entryNode.x + Math.floor(entryNode.w / 2), y: entryNode.y } : null);
+
+  // --- FIX 2: Added Billing Node to the Path Array ---
+  const listRoutePoints: any[] = [];
+  if (pendingOptimizedPath.length > 0 || activePath.length > 0) {
+    if (effectiveCartLocation) listRoutePoints.push(effectiveCartLocation); // Start at cart
+    pendingOptimizedPath.forEach((op: any) => { if (op.pickup_point) listRoutePoints.push(op.pickup_point); });
+
+    // Add the checkout/billing point to the end of the route
+    if (billingNode) {
+      listRoutePoints.push({ x: billingNode.x + Math.floor((billingNode.w || 1) / 2), y: billingNode.y });
+    }
+  }
+  const mainPathLines = findWalkablePath(layout, listRoutePoints);
+
+  // --- FIX 1: True POV Camera Rotation ---
+  // Find where the user is heading next
+  const nextPt = pendingOptimizedPath.length > 0
+    ? pendingOptimizedPath[0].pickup_point
+    : (billingNode ? { x: billingNode.x + Math.floor((billingNode.w || 1) / 2), y: billingNode.y } : null);
+
+  let rotationAngle = isHorizontal ? -90 : 0; // Default fallback rotations
+
+  if (effectiveCartLocation && nextPt) {
+    if (isHorizontal) {
+      // If moving Left (-x) -> rotate 90. If moving Right (+x) -> rotate -90.
+      if (nextPt.x < effectiveCartLocation.x - 0.5) rotationAngle = 90;
+      else if (nextPt.x > effectiveCartLocation.x + 0.5) rotationAngle = -90;
+    } else {
+      // If moving Down (+y) -> rotate 180. If moving Up (-y) -> rotate 0.
+      if (nextPt.y > effectiveCartLocation.y + 0.5) rotationAngle = 180;
+      else if (nextPt.y < effectiveCartLocation.y - 0.5) rotationAngle = 0;
+    }
   }
 
-  const CELL = 22; // px per grid cell
-  const mapW = GRID_W * CELL;
-  const mapH = GRID_H * CELL;
+  // Swap Width/Height of the viewBox if the camera is rotated sideways
+  const isViewRotated = Math.abs(rotationAngle) === 90;
+
+  // 2. Determine Camera Bounding Box using DYNAMIC layout elements
+  const allRacks = layout.elements.filter((e: any) => e.type === "rack");
+  const activeRacks = allRacks.filter((r: any) => racks.includes(r.rack_id));
+
+  let minX = 0, maxX = 25, minY = 0, maxY = 10;
+  if (activeRacks.length > 0) {
+    minX = Math.min(...activeRacks.map((r: any) => r.x)) - 2;
+    maxX = Math.max(...activeRacks.map((r: any) => r.x + (r.w || 1))) + 2;
+    minY = Math.min(...activeRacks.map((r: any) => r.y)) - 2;
+    maxY = Math.max(...activeRacks.map((r: any) => r.y + (r.h || 1))) + 2;
+  }
+
+  let vW = maxX - minX;
+  let vH = maxY - minY;
+  if (vW < 8) { const diff = 8 - vW; minX -= diff / 2; maxX += diff / 2; vW = 8; }
+  if (vH < 8) { const diff = 8 - vH; minY -= diff / 2; maxY += diff / 2; vH = 8; }
+
+  // Clamp to store boundaries
+  const maxCols = layout.floor_area ? layout.floor_area.length_ft / layout.floor_area.feet_per_cell : 26;
+  const maxRows = layout.floor_area ? layout.floor_area.width_ft / layout.floor_area.feet_per_cell : 11;
+
+  minX = Math.max(-1, minX); minY = Math.max(-1, minY);
+  maxX = Math.min(maxCols, maxX); maxY = Math.min(maxRows, maxY);
+  vW = maxX - minX; vH = maxY - minY;
+
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+
+  // Apply rotated ViewBox dimensions
+  const vbW = isViewRotated ? vH : vW;
+  const vbH = isViewRotated ? vW : vH;
 
   return (
-    <div className="w-full">
-      {/* Scrollable map */}
-      <div className="overflow-auto">
-        <div
-          className="relative mx-auto"
-          style={{ width: mapW, height: mapH, background: "#f1f5f9", borderRadius: 8, border: "1px solid #cbd5e1" }}
-        >
-          {/* Entry zone */}
-          <div className="absolute flex items-center justify-center text-[7px] font-bold text-slate-400 tracking-widest"
-            style={{ left: 5 * CELL, top: 9 * CELL, width: 7 * CELL, height: CELL, background: "#e0f2fe66" }}>
-            ENTRY
-          </div>
-          {/* Billing zone */}
-          <div className="absolute flex items-center justify-center text-[7px] font-bold text-slate-400 tracking-widest"
-            style={{ left: 13 * CELL, top: 9 * CELL, width: 7 * CELL, height: CELL, background: "#fef9c366" }}>
-            BILLING
-          </div>
+    <div className="w-full h-full bg-slate-50 rounded-xl overflow-hidden flex items-center justify-center">
+      <svg viewBox={`0 0 ${vbW * CELL} ${vbH * CELL}`} className="w-full h-full max-w-full max-h-full drop-shadow-sm">
+        <defs>
+          <pattern id="pov-grid" width={CELL} height={CELL} patternUnits="userSpaceOnUse">
+            <path d={`M ${CELL} 0 L 0 0 0 ${CELL}`} fill="none" stroke="#e2e8f0" strokeWidth="1" />
+          </pattern>
+        </defs>
 
-          {/* Racks */}
-          {STORE_RACKS.map(rack => {
-            const counts = rackCounts.get(rack.rack_id);
-            const isNear = nearbyRacks.includes(rack.rack_id);
-            const hasPend = (counts?.pending ?? 0) > 0;
-            const hasBought = (counts?.bought ?? 0) > 0;
+        <g
+          transform={`translate(${(vbW * CELL) / 2}, ${(vbH * CELL) / 2}) rotate(${rotationAngle}) translate(${-cx * CELL}, ${-cy * CELL})`}
+          className="transition-all duration-700 ease-in-out"
+        >
+          {/* Background Grid */}
+          <rect x={-CELL} y={-CELL} width={(maxCols + 2) * CELL} height={(maxRows + 2) * CELL} fill="url(#pov-grid)" />
+
+          {/* 1. Full Shopping List Path Line (Blue) */}
+          {mainPathLines.length > 1 && (
+            <polyline
+              points={mainPathLines.map((p: any) => `${p.x * CELL + (CELL / 2)},${p.y * CELL + (CELL / 2)}`).join(" ")}
+              fill="none" stroke="#3b82f6" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="12 12"
+              className="opacity-80 animate-[dash_1.5s_linear_infinite]"
+            />
+          )}
+          <style>{`@keyframes dash { to { stroke-dashoffset: -24; } }`}</style>
+
+          {/* 2. Dynamic DB Store Elements (Racks, Walls, Zones) */}
+          {layout.elements.map((el: any) => {
+            if (el.type === "aisle_marker") return null;
+
+            const isRack = el.type === "rack";
+            const isNear = isRack && racks.includes(el.rack_id);
+
+            // FIX: Multiply by CELL exactly once!
+            const rx = el.x * CELL, ry = el.y * CELL;
+            const rwPx = (el.w || 1) * CELL, rhPx = (el.h || 1) * CELL;
+
+            // Re-add the colors for the walls and zones so the map isn't empty
+            const bgColor = isRack ? (el.meta?.color || "#cbd5e1") :
+              el.zoneType === "wall" ? "#94a3b8" :
+                el.zoneType === "entry" ? "#bfdbfe" :
+                  el.zoneType === "billing" ? "#bbf7d0" : "#e2e8f0";
+
+            // Counter-Rotation Math: Keep text upright relative to the SCREEN!
+            const isElementVerticalOnScreen = isViewRotated ? ((el.w || 1) > (el.h || 1)) : ((el.h || 1) > (el.w || 1));
+            const targetScreenRot = isElementVerticalOnScreen ? -90 : 0;
+            const textRot = targetScreenRot - rotationAngle;
 
             return (
-              <div
-                key={rack.rack_id}
-                title={`${rack.label} (${rack.rack_id})`}
-                className="absolute flex items-center justify-center overflow-hidden transition-all duration-400"
-                style={{
-                  left: rack.x * CELL,
-                  top: rack.y * CELL,
-                  width: rack.w * CELL,
-                  height: rack.h * CELL,
-                  background: isNear ? rack.color + "ee" : rack.color + "88",
-                  border: `2px solid ${isNear ? rack.color : rack.color + "99"}`,
-                  borderRadius: 4,
-                  boxShadow: isNear ? `0 0 14px ${rack.color}cc` : undefined,
-                  zIndex: isNear ? 5 : 1,
-                }}
-              >
-                {/* Rack name label */}
-                <span
-                  style={{
-                    fontSize: 7,
-                    fontWeight: 700,
-                    color: "#1e293b",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    writingMode: rack.orientation === "vertical" ? "vertical-rl" : undefined,
-                    transform: rack.orientation === "vertical" ? "rotate(180deg)" : undefined,
-                    padding: "1px 2px",
-                    textShadow: "0 0 4px #fff",
-                  }}
+              <g key={el.id || el.rack_id} transform={`translate(${rx}, ${ry})`}>
+                <rect
+                  width={rwPx} height={rhPx}
+                  fill={isRack && !isNear ? bgColor + "66" : bgColor} // Dim racks we aren't near
+                  rx={isRack ? 4 : 0}
+                  stroke={isNear ? "#1e293b" : "none"} strokeWidth={isNear ? 2 : 0}
+                  style={{ transition: "all 0.5s ease" }}
+                />
+                <text
+                  x={rwPx / 2} y={rhPx / 2}
+                  fill={el.zoneType === "wall" || el.zoneType === "restricted" ? "#ffffff" : (isNear ? "#1e293b" : "#475569")}
+                  fontSize={isRack ? CELL * 0.28 : CELL * 0.35}
+                  fontWeight="bold" textAnchor="middle" dominantBaseline="middle"
+                  transform={`rotate(${textRot}, ${rwPx / 2}, ${rhPx / 2})`}
+                  style={{ pointerEvents: 'none' }}
                 >
-                  {rack.label}
-                </span>
-
-                {/* NEARBY badge */}
-                {isNear && (
-                  <div
-                    className="absolute top-0.5 left-1/2 -translate-x-1/2 bg-blue-500 text-white rounded-full font-bold"
-                    style={{ fontSize: 6, padding: "1px 4px", whiteSpace: "nowrap", zIndex: 10 }}
-                  >
-                    HERE
-                  </div>
-                )}
-
-                {/* Item count dots */}
-                {(hasPend || hasBought) && (
-                  <div
-                    className="absolute bottom-0.5 right-0.5 flex gap-0.5"
-                    style={{ zIndex: 10 }}
-                  >
-                    {hasPend && (
-                      <div
-                        className="rounded-full bg-rose-500 text-white flex items-center justify-center font-bold"
-                        style={{ width: 11, height: 11, fontSize: 7 }}
-                        title={`${counts!.pending} to pick`}
-                      >
-                        {counts!.pending}
-                      </div>
-                    )}
-                    {hasBought && (
-                      <div
-                        className="rounded-full bg-green-500 text-white flex items-center justify-center font-bold"
-                        style={{ width: 11, height: 11, fontSize: 7 }}
-                        title={`${counts!.bought} picked`}
-                      >
-                        {counts!.bought}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                  {el.label || el.name}
+                </text>
+              </g>
             );
           })}
 
-          {/* Cart location dot */}
-          {cartLocation && (
-            <div
-              className="absolute z-20 pointer-events-none"
-              style={{
-                left: cartLocation.x * CELL - 7,
-                top: cartLocation.y * CELL - 7,
-                width: 14,
-                height: 14,
-              }}
-            >
-              <div className="absolute inset-0 rounded-full bg-blue-400 opacity-50 animate-ping" />
-              <div className="absolute inset-[2px] rounded-full bg-blue-600 shadow-lg" />
-            </div>
-          )}
-        </div>
-      </div>
+          {/* 3. Pointer Stubs & Dots */}
+          {pendingOptimizedPath.map((op: any, idx: number) => {
+            if (!op.pickup_point) return null;
 
-      {/* Legend */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 px-1 text-[10px] text-slate-500">
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" />To pick</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block" />Picked</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block" />You</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded border-2 border-blue-400 inline-block bg-blue-100" />Nearby</span>
-      </div>
+            const px = op.pickup_point.x * CELL + CELL / 2;
+            const py = op.pickup_point.y * CELL + CELL / 2;
+
+            const rack = allRacks.find((e: any) => e.rack_id === op.rack_id);
+            let dx = 0, dy = 0;
+            if (rack) {
+              const facing = rack.meta?.facing || "bottom";
+              if (facing === "right") dx = -CELL / 2;
+              else if (facing === "left") dx = CELL / 2;
+              else if (facing === "top") dy = CELL / 2;
+              else if (facing === "bottom") dy = -CELL / 2;
+            }
+
+            return (
+              <g key={`badge-${idx}`}>
+                {rack && <line x1={px} y1={py} x2={px + dx} y2={py + dy} stroke="#3b82f6" strokeWidth="6" strokeLinecap="round" />}
+                <circle cx={px} cy={py} r="7" fill="#1e293b" stroke="#ffffff" strokeWidth="2" />
+              </g>
+            );
+          })}
+
+          {/* 4. Live Cart Location */}
+          {effectiveCartLocation && (
+            <g transform={`translate(${effectiveCartLocation.x * CELL + CELL / 2}, ${effectiveCartLocation.y * CELL + CELL / 2})`} className="transition-transform duration-500">
+              <circle r={CELL * 0.5} fill="#3b82f6" className="animate-ping opacity-40" />
+              <circle r={CELL * 0.3} fill="#2563eb" stroke="#ffffff" strokeWidth="3" />
+            </g>
+          )}
+        </g>
+      </svg>
     </div>
   );
 };
-
 // ─── Checkout Modal ─────────────────────────────────────────────────────────────
 
 const CheckoutModal = ({
@@ -373,29 +427,53 @@ export const MainInterface = ({ onBack, onRouteReady, onCheckout, recentlyAddedI
   const [optimizedPath, setOptimizedPath] = useState<any[]>([]);
   const [backendMatchedItems, setBackendMatchedItems] = useState<any[]>([]);
   const itemRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+  const [povState, setPovState] = useState<{ racks: string[], isHorizontal: boolean }>({ racks: [], isHorizontal: false });
+  const [layout, setLayout] = useState<any>(null);
 
-  // ── Read user_id from localStorage (set by LoginScreen)
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("cart_user");
-      if (raw) { const p = JSON.parse(raw); if (p?.user_id) setUserId(p.user_id); }
-    } catch { /* guest */ }
+    fetch(`${BASE_URL}/store/layout/STORE001`)
+      .then(res => res.json())
+      .then(data => setLayout(data))
+      .catch(e => console.error("Failed to fetch layout:", e));
   }, []);
+
+  // --- UPDATED: Continuous User Sync ---
+  // Since the component never unmounts, we must actively watch localStorage
+  useEffect(() => {
+    const checkUser = () => {
+      try {
+        const raw = localStorage.getItem("cart_user");
+        if (raw) {
+          const p = JSON.parse(raw);
+          if (p?.user_id && p.user_id !== userId) setUserId(p.user_id);
+        } else if (userId) {
+          setUserId(null); // Clear state if logged out
+        }
+      } catch {}
+    };
+    
+    checkUser(); // Check immediately
+    const interval = setInterval(checkUser, 1000); // Check every second
+    return () => clearInterval(interval);
+  }, [userId]);
 
   // ── Poll /cart/display every POLL_MS — single source of truth
   const pollCart = useCallback(async () => {
     if (isPollingPaused) return; // <-- ADD EARLY RETURN
 
     try {
-      const res = await fetch(`${BASE_URL}/cart/display/${CART_ID}`, { cache: "no-store" });
+      // 🚨 FIX: Added ?t=${Date.now()} to completely bust the cache!
+      const res = await fetch(`${BASE_URL}/cart/display/${CART_ID}?t=${Date.now()}`, { cache: "no-store" });
       if (!res.ok) return;
       const data: CartDisplay = await res.json();
       if ((data as any).error) return;
 
-      // 🚨 --- NEW LOGIC: Detect Remote Logout & Force Reload --- 🚨
+      // 🚨 --- UPDATED: Detect Remote Logout --- 🚨
       const localSession = localStorage.getItem("cart_user");
 
-      if (localSession && !data.linked_user_id) {
+      // If we have a local session, but the cart status reset to "available", 
+      // it means the backend forcefully cleared the cart session!
+      if (localSession && data.status === "available") {
         console.log("Remote logout detected! Resetting cart UI...");
         localStorage.removeItem("cart_user");
         window.location.reload();
@@ -441,6 +519,46 @@ export const MainInterface = ({ onBack, onRouteReady, onCheckout, recentlyAddedI
     const id = setInterval(pollCart, POLL_MS);
     return () => clearInterval(id);
   }, [pollCart]);
+
+  // --- UPDATED: Dynamic Camera Tracking (With Entry Default) ---
+  useEffect(() => {
+    const loc = cartDisplay?.current_location;
+    if (!layout) return; // Wait for layout to load
+
+    const allRacks = layout.elements.filter((e: any) => e.type === "rack");
+    let targetRacks: string[] = [];
+
+    // 1. If we have a live location, use it
+    if (loc) {
+      if (loc.nearby_racks && loc.nearby_racks.length > 0) {
+        targetRacks = loc.nearby_racks;
+      } else if (loc.rack_id) {
+        targetRacks = [loc.rack_id];
+      }
+    }
+
+    // 2. NO LOCATION YET: Default to the Entry Zone POV
+    if (targetRacks.length === 0) {
+      const entry = layout.elements.find((e: any) => e.zoneType === "entry");
+      if (entry) {
+        // Find the closest rack to the entry doors to frame the camera correctly
+        const closestRack = allRacks.reduce((closest: any, rack: any) => {
+          const dist = Math.hypot(rack.x - entry.x, rack.y - entry.y);
+          return (!closest || dist < closest.dist) ? { rack, dist } : closest;
+        }, null)?.rack;
+
+        if (closestRack) {
+          targetRacks = [closestRack.rack_id];
+        }
+      }
+    }
+
+    // 3. Update the camera rotation and zoom to track the active racks
+    if (targetRacks.length > 0) {
+      const isHoriz = allRacks.find((r: any) => targetRacks.includes(r.rack_id))?.meta?.orientation === "horizontal";
+      setPovState({ racks: targetRacks, isHorizontal: !!isHoriz });
+    }
+  }, [cartDisplay?.current_location, layout]);
 
   useEffect(() => {
     if (recentlyAddedItem && itemRefs.current[recentlyAddedItem]) {
@@ -658,6 +776,26 @@ export const MainInterface = ({ onBack, onRouteReady, onCheckout, recentlyAddedI
     });
   }
 
+  if (activePath.length > 0) {
+    enrichedItems.sort((a, b) => {
+      const indexA = a.item_id && orderMap.has(a.item_id) ? orderMap.get(a.item_id)! : 9999;
+      const indexB = b.item_id && orderMap.has(b.item_id) ? orderMap.get(b.item_id)! : 9999;
+      return indexA - indexB;
+    });
+  }
+
+  // --- NEW: Dynamic DB Rack Badge Logic ---
+  const rackBadge = (rackId: string, positionIndex?: number, rackName?: string) => {
+    // 1. If the backend already provided a friendly name, use it.
+    if (rackName) return positionIndex != null ? `${rackName} · ${positionIndex}` : rackName;
+
+    // 2. Otherwise, look it up dynamically from the live DB layout!
+    const dynamicRack = layout?.elements?.find((e: any) => e.rack_id === rackId);
+    const name = dynamicRack?.label || dynamicRack?.name || rackId;
+
+    return positionIndex != null ? `${name} · ${positionIndex}` : name;
+  };
+
   return (
     <>
       <CheckoutModal
@@ -667,7 +805,7 @@ export const MainInterface = ({ onBack, onRouteReady, onCheckout, recentlyAddedI
 
       <div className="h-screen w-screen bg-background overflow-hidden flex">
 
-        {/* ── Left: Store Map ── */}
+        {/* ── Left: Store POV Map ── */}
         <div className="w-1/4 p-4 flex flex-col min-w-0">
           <div className="flex items-center justify-between mb-3">
             <Button variant="outline" size="sm" onClick={onBack}
@@ -676,14 +814,23 @@ export const MainInterface = ({ onBack, onRouteReady, onCheckout, recentlyAddedI
             </Button>
           </div>
           <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center justify-center">
-            <MapPin className="h-4 w-4 mr-1 text-blue-600" />STORE MAP
+            <MapPin className="h-4 w-4 mr-1 text-blue-600" />AISLE VIEW
           </h3>
-          <div className="flex-1 bg-white rounded-xl shadow-lg p-3 overflow-auto">
-            <StoreMinimap
-              enrichedItems={enrichedItems} // <-- Updated
-              nearbyRacks={nearbyRacks}
-              cartLocation={cartLocation}
-            />
+          <div className="flex-1 bg-white rounded-xl shadow-lg p-3 overflow-hidden">
+            {/* Compute scanned items so we know which dots to hide */}
+            {(() => {
+              const scannedItemIds = new Set(cartItems.map((i: any) => i.item_id));
+
+              return (
+                <POVStoreMap
+                  layout={layout}
+                  activePath={activePath}             // From your existing derived state!
+                  scannedItemIds={scannedItemIds}
+                  povState={povState}
+                  cartLocation={cartLocation}
+                />
+              );
+            })()}
           </div>
         </div>
 

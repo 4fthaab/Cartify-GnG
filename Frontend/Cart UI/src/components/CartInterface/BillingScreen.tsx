@@ -100,8 +100,8 @@ export const BillingScreen = ({ cartItems, totalAmount, onBack, onDone }: Billin
       )}
 
       {/* Billing Content */}
-      <div className="flex-1 flex justify-center items-start w-full pb-8">
-        <div className="bg-white rounded-3xl p-6 md:p-4 max-w-3xl w-full flex flex-col my-auto">
+      <div className="flex-1 flex justify-center items-center w-full pb-4 md:pb-8 overflow-hidden">
+        <div className="bg-white rounded-3xl p-6 md:p-4 max-w-3xl w-full flex flex-col max-h-full">
 
           {/* Bill Title */}
           <div className="flex items-center gap-2 mb-3 border-b pb-3">
@@ -110,7 +110,7 @@ export const BillingScreen = ({ cartItems, totalAmount, onBack, onDone }: Billin
           </div>
 
           {/* Scrollable Item List */}
-          <div className="flex-1 overflow-y-auto pr-2 mb-4 space-y-3 min-h-[150px]">
+          <div className="flex-1 overflow-y-auto mb-4 space-y-3 min-h-[150px] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             {cartItems.length === 0 ? (
               <div className="text-center py-8 text-slate-400">
                 <ShoppingCart className="h-10 w-10 mx-auto mb-3 opacity-30" />

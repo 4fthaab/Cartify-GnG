@@ -413,6 +413,10 @@ def view_cart(cart_id: str):
     
 @router.post("/cart/marker-update")
 async def marker_update(payload: dict):
+    
+    """
+    { "cart_id": "CART103", "marker_id": "4","confidence" : 1.0}
+    """
 
     cart_id = payload["cart_id"]
     marker_id = payload["marker_id"]
@@ -666,13 +670,24 @@ def cart_checkout(payload: dict):
             if len(new_items) > 0:
                 timestamp = int(datetime.utcnow().timestamp())
                 next_list_id = f"{linked_user_id}_L{timestamp}"
+                # --- NEW NAMING LOGIC ---
+                current_name = old_list.get('list_name', 'My List').strip()
+                
+                # If the string ends with "(Next)", slice off the last 6 characters
+                if current_name.endswith("(Next)"):
+                    base_name = current_name[:-6].strip()
+                else:
+                    base_name = current_name
+                    
+                new_list_name = f"{base_name} (Next)"
+                    
                 new_list = {
                     "user_id": linked_user_id,
                     "list_id": next_list_id,
                     "items": new_items,
                     "created_at": datetime.utcnow().isoformat(),
                     "status": "pending",
-                    "list_name": f"{old_list.get('list_name', 'My List')} (Next)"
+                    "list_name": new_list_name
                 }
                 db["shopping_lists"].insert_one(new_list)
                 remaining_items = len(new_items)
