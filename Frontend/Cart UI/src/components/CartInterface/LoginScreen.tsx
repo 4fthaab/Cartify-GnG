@@ -2,6 +2,7 @@ import { QrCode, UserCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { QRCodeCanvas } from "qrcode.react";
 import { useEffect, useState } from "react";
+import { BASE_URL, CART_ID, STORE_ID } from "@/config";
 
 interface LoginScreenProps {
   onNext: () => void;
@@ -9,17 +10,14 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen = ({ onNext, isActive = true }: LoginScreenProps) => {
-  const [cartId] = useState("CART103");
-  const [storeId] = useState("STORE001");
+
   
   useEffect(() => {
     if (!isActive) return;
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(
-          `http://10.211.103.220:8000/cart/status/${cartId}`
-        );
+        const res = await fetch(`${BASE_URL}/cart/status/${CART_ID}`);
         const data = await res.json();
 
         if (data.assigned) {
@@ -36,12 +34,12 @@ export const LoginScreen = ({ onNext, isActive = true }: LoginScreenProps) => {
     return () => clearInterval(interval);
     
   // 5. Add isActive to the dependency array
-  }, [isActive, cartId]);
+  }, [isActive, CART_ID]);
 
   const qrData = JSON.stringify({
-    cart_id: "CART103",
-    store_id: "STORE001"
-  });
+      cart_id: CART_ID,
+      store_id: STORE_ID
+    });
 return (
     <div className="h-screen w-screen flex items-center justify-center bg-gradient-hero relative overflow-hidden p-4">
       {/* Animated background elements */}
@@ -79,7 +77,7 @@ return (
               </h3>
 
               <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                Cart ID: <span className="font-medium">{cartId}</span>
+                Cart ID: <span className="font-medium">{CART_ID}</span>
               </p>
 
               {/* Waiting Animation */}

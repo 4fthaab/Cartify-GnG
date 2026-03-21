@@ -4,8 +4,7 @@ import { QRCodeCanvas } from "qrcode.react";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ReceiptScreen } from "./ReceiptScreen";
-
-const BASE_URL = "http://10.211.103.220:8000";
+import { BASE_URL } from "@/config";
 
 interface PaymentScreenProps {
   paymentData: {

@@ -2,9 +2,7 @@
 import { ArrowLeft, CheckCircle2, Wallet, Receipt, ShoppingCart, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-
-const BASE_URL = "http://10.211.103.220:8000";
-const CART_ID = "CART103";
+import { BASE_URL, CART_ID } from "@/config";
 
 interface BillingScreenProps {
   cartItems: any[];        // <-- Receive items from parent

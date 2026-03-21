@@ -6,9 +6,8 @@ import {
   CheckCircle2, ArrowRight, ChevronLeft, Loader2, RefreshCw, Gift, Tag
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BASE_URL, CART_ID, STORE_ID } from "@/config";
 
-const BASE_URL = "http://10.211.103.220:8000";
-const CART_ID = "CART103";
 const POLL_MS = 2500;
 
 // ─── Utility: BFS Pathfinding (Walkable Grid) ────────────────────────────────
@@ -431,7 +430,7 @@ export const MainInterface = ({ onBack, onRouteReady, onCheckout, recentlyAddedI
   const [layout, setLayout] = useState<any>(null);
 
   useEffect(() => {
-    fetch(`${BASE_URL}/store/layout/STORE001`)
+    fetch(`${BASE_URL}/store/layout/${STORE_ID}`)
       .then(res => res.json())
       .then(data => setLayout(data))
       .catch(e => console.error("Failed to fetch layout:", e));

@@ -12,10 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-
-const BASE_URL = "http://10.211.103.220:8000"; // Adjust if needed
-const STORE_ID = "STORE001";
-const CART_ID = "CART103";
+import { BASE_URL, CART_ID, STORE_ID } from "@/config";
 
 // ─── Utility: Compute Exact Pickup Point ─────────────────────────────────────
 const computePickupPoint = (rackId: string, positionIndex: number, layout: any) => {

@@ -2,10 +2,7 @@
 import { useState } from "react";
 import { Star, MessageSquareHeart, Loader2, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-const BASE_URL = "http://10.211.103.220:8000";
-const CART_ID = "CART103";
-const STORE_ID = "STORE001";
+import { BASE_URL, CART_ID, STORE_ID } from "@/config";
 
 interface RatingScreenProps {
   onDone: () => void;
