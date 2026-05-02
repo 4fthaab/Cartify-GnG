@@ -5,8 +5,8 @@ import { useState } from "react";
 import { BASE_URL, CART_ID } from "@/config";
 
 interface BillingScreenProps {
-  cartItems: any[];        // <-- Receive items from parent
-  totalAmount: number;     // <-- Receive total from parent
+  cartItems: any[];        
+  totalAmount: number;     
   onBack: () => void;
   onDone: (paymentData: { payment_id: string; amount: number; order_id: string; qr_payload: string; method: string; }) => void;
 }

@@ -10,7 +10,7 @@ import { BASE_URL, CART_ID, STORE_ID } from "@/config";
 
 const POLL_MS = 2500;
 
-// ─── Utility: BFS Pathfinding (Walkable Grid) ────────────────────────────────
+//Utility: BFS Pathfinding (Walkable Grid)
 function findWalkablePath(layout: any, points: { x: number; y: number }[]) {
   if (!layout || !points || points.length < 2) return [];
 
@@ -63,7 +63,7 @@ function findWalkablePath(layout: any, points: { x: number; y: number }[]) {
   return fullPath;
 }
 
-// ─── Types ─────────────────────────────────────────────────────────────────────
+
 
 interface ListItem { name: string; bought: boolean; }
 interface CartItem { item_id: string; name: string; weight_g: number; price: number; qty: number; added_at: string; confirmed: boolean; }
@@ -97,7 +97,7 @@ interface AvailableList {
   items: { name: string; bought?: boolean }[]; status: string;
 }
 
-// ─── Store POV Map (Dynamic Database Camera & True POV) ──────────────────────
+//Utility: Store POV Map (Dynamic Database Camera & True POV)
 const POVStoreMap = ({
   layout,
   activePath,
@@ -127,7 +127,7 @@ const POVStoreMap = ({
     ? { x: Math.round(cartLocation.x), y: Math.round(cartLocation.y) }
     : (entryNode ? { x: entryNode.x + Math.floor(entryNode.w / 2), y: entryNode.y } : null);
 
-  // --- FIX 2: Added Billing Node to the Path Array ---
+  // FIX 2: Added Billing Node to the Path Array 
   const listRoutePoints: any[] = [];
   if (pendingOptimizedPath.length > 0 || activePath.length > 0) {
     if (effectiveCartLocation) listRoutePoints.push(effectiveCartLocation); // Start at cart
@@ -140,7 +140,7 @@ const POVStoreMap = ({
   }
   const mainPathLines = findWalkablePath(layout, listRoutePoints);
 
-  // --- FIX 1: True POV Camera Rotation ---
+  //  FIX 1: True POV Camera Rotation
   // Find where the user is heading next
   const nextPt = pendingOptimizedPath.length > 0
     ? pendingOptimizedPath[0].pickup_point
@@ -303,7 +303,7 @@ const POVStoreMap = ({
     </div>
   );
 };
-// ─── Checkout Modal ─────────────────────────────────────────────────────────────
+// Checkout Modal
 
 const CheckoutModal = ({
   isOpen, onClose, onConfirm, cartItems, pendingListItems, totalAmount,
@@ -400,7 +400,7 @@ const CheckoutModal = ({
   return createPortal(modal, document.body);
 };
 
-// ─── Main Interface ─────────────────────────────────────────────────────────────
+// Main Interface
 
 interface MainInterfaceProps {
   onBack: () => void;
@@ -436,7 +436,7 @@ export const MainInterface = ({ onBack, onRouteReady, onCheckout, recentlyAddedI
       .catch(e => console.error("Failed to fetch layout:", e));
   }, []);
 
-  // --- UPDATED: Continuous User Sync ---
+  //  UPDATED: Continuous User Sync 
   // Since the component never unmounts, we must actively watch localStorage
   useEffect(() => {
     const checkUser = () => {
@@ -456,18 +456,18 @@ export const MainInterface = ({ onBack, onRouteReady, onCheckout, recentlyAddedI
     return () => clearInterval(interval);
   }, [userId]);
 
-  // ── Poll /cart/display every POLL_MS — single source of truth
+  // Poll /cart/display every POLL_MS single source of truth
   const pollCart = useCallback(async () => {
-    if (isPollingPaused) return; // <-- ADD EARLY RETURN
+    if (isPollingPaused) return; //  ADD EARLY RETURN
 
     try {
-      // 🚨 FIX: Added ?t=${Date.now()} to completely bust the cache!
+      //  FIX: Added ?t=${Date.now()} to completely bust the cache!
       const res = await fetch(`${BASE_URL}/cart/display/${CART_ID}?t=${Date.now()}`, { cache: "no-store" });
       if (!res.ok) return;
       const data: CartDisplay = await res.json();
       if ((data as any).error) return;
 
-      // 🚨 --- UPDATED: Detect Remote Logout --- 🚨
+      //  UPDATED: Detect Remote Logout 
       const localSession = localStorage.getItem("cart_user");
 
       // If we have a local session, but the cart status reset to "available", 
@@ -482,7 +482,7 @@ export const MainInterface = ({ onBack, onRouteReady, onCheckout, recentlyAddedI
       // Update the main display state
       setCartDisplay(data);
 
-      // --- Auto-sync User ID ---
+      //Auto-sync User ID
       if (data.linked_user_id) {
         setUserId(prev => {
           if (prev !== data.linked_user_id) {
@@ -496,7 +496,7 @@ export const MainInterface = ({ onBack, onRouteReady, onCheckout, recentlyAddedI
         setAvailableLists([]);
       }
 
-      // --- Auto-sync List ID ---
+      // Auto-sync List ID 
       if (data.linked_list_id) {
         setSelectedListId(data.linked_list_id);
       } else {
@@ -519,7 +519,7 @@ export const MainInterface = ({ onBack, onRouteReady, onCheckout, recentlyAddedI
     return () => clearInterval(id);
   }, [pollCart]);
 
-  // --- UPDATED: Dynamic Camera Tracking (With Entry Default) ---
+  //  UPDATED: Dynamic Camera Tracking (With Entry Default) 
   useEffect(() => {
     const loc = cartDisplay?.current_location;
     if (!layout) return; // Wait for layout to load
@@ -585,7 +585,7 @@ export const MainInterface = ({ onBack, onRouteReady, onCheckout, recentlyAddedI
     fetchOffers();
   }, []);
 
-  // ── Fetch user's shopping lists
+  //  Fetch user's shopping lists
   const fetchLists = useCallback(async () => {
     if (!userId) return;
     setLoadingLists(true); setError(null);
@@ -601,7 +601,7 @@ export const MainInterface = ({ onBack, onRouteReady, onCheckout, recentlyAddedI
 
   useEffect(() => { fetchLists(); }, [fetchLists]);
 
-  // ── Link list to cart (two-step: preview → confirm)
+  //  Link list to cart (two-step: preview → confirm)
   const handleSelectList = (listId: string) => {
     setPendingListId(listId);
   };
@@ -691,14 +691,14 @@ export const MainInterface = ({ onBack, onRouteReady, onCheckout, recentlyAddedI
     }
   }, [selectedListId, userId, cartDisplay?.store_id]);
 
-  // ── Checkout — just navigate to BillingScreen; actual /cart/checkout is called
+  //  Checkout — just navigate to BillingScreen; actual /cart/checkout is called
   // from PaymentScreen once the user has selected a payment method.
   const handleCheckout = async () => {
     setShowModal(false);
-    onCheckout(cartItems, totalAmount); // <-- Pass the data up!
+    onCheckout(cartItems, totalAmount); //  Pass the data up!
   };
 
-  // ── Derived state from cartDisplay
+  //  Derived state from cartDisplay
   const cartItems = cartDisplay?.items ?? [];
   const rawListItems = cartDisplay?.user_list_items ?? [];
   const backendMatches = cartDisplay?.backend_matches ?? [];
@@ -708,7 +708,7 @@ export const MainInterface = ({ onBack, onRouteReady, onCheckout, recentlyAddedI
   const nearbyRacks = cartDisplay?.current_location?.nearby_racks ?? [];
   const cartLocation = cartDisplay?.current_location;
 
-  // ── Build Enriched Items and Sort via A* Path ──
+  //  Build Enriched Items and Sort via A* Path 
   const activePath = (cartDisplay?.optimized_path && cartDisplay.optimized_path.length > 0)
     ? cartDisplay.optimized_path
     : optimizedPath;
@@ -783,7 +783,7 @@ export const MainInterface = ({ onBack, onRouteReady, onCheckout, recentlyAddedI
     });
   }
 
-  // --- NEW: Dynamic DB Rack Badge Logic ---
+  //  NEW: Dynamic DB Rack Badge Logic 
   const rackBadge = (rackId: string, positionIndex?: number, rackName?: string) => {
     // 1. If the backend already provided a friendly name, use it.
     if (rackName) return positionIndex != null ? `${rackName} · ${positionIndex}` : rackName;
@@ -804,7 +804,7 @@ export const MainInterface = ({ onBack, onRouteReady, onCheckout, recentlyAddedI
 
       <div className="h-screen w-screen bg-background overflow-hidden flex">
 
-        {/* ── Left: Store POV Map ── */}
+        {/*  Left: Store POV Map  */}
         <div className="w-1/4 p-4 flex flex-col min-w-0">
           <div className="flex items-center justify-between mb-3">
             <Button variant="outline" size="sm" onClick={onBack}
@@ -833,7 +833,7 @@ export const MainInterface = ({ onBack, onRouteReady, onCheckout, recentlyAddedI
           </div>
         </div>
 
-        {/* ── Center: Shopping List / Cart ── */}
+        {/*  Center: Shopping List / Cart  */}
         <div className="flex-1 p-6 flex flex-col animate-fade-in min-w-0">
 
           {error && (
@@ -844,11 +844,11 @@ export const MainInterface = ({ onBack, onRouteReady, onCheckout, recentlyAddedI
           )}
 
           {!selectedListId ? (
-            /* ── View 1: List Selection (or Confirm step) ── */
+            /*  View 1: List Selection (or Confirm step)  */
             <div className="flex-1 bg-white rounded-3xl shadow-lg p-8 flex flex-col items-center justify-center overflow-auto">
 
               {pendingListId ? (
-                /* ── Confirm step: preview the selected list before linking ── */
+                /*  Confirm step: preview the selected list before linking  */
                 (() => {
                   const selectedList = availableLists.find(l => l.list_id === pendingListId);
                   return (
@@ -1015,10 +1015,10 @@ export const MainInterface = ({ onBack, onRouteReady, onCheckout, recentlyAddedI
                         <p>No items in this list.</p>
                       </div>
                     ) : enrichedItems.map((item, idx) => {
-                      const isRecentlyAdded = recentlyAddedItem === item.name; // <-- Check if it's the new item!
+                      const isRecentlyAdded = recentlyAddedItem === item.name; //  Check if it's the new item!
                       return (
                         <div key={idx}
-                          ref={(el) => (itemRefs.current[item.name] = el)} // <-- Attach the ref!
+                          ref={(el) => (itemRefs.current[item.name] = el)} // Attach the ref!
                           className={cn(
                             "p-4 rounded-xl border-2 transition-all duration-500 flex items-center justify-between gap-3",
                             item.bought ? "bg-gradient-to-r from-slate-50 to-slate-100 border-slate-200 opacity-60" :
@@ -1052,7 +1052,7 @@ export const MainInterface = ({ onBack, onRouteReady, onCheckout, recentlyAddedI
           )}
         </div>
 
-        {/* ── Right: Offers + Checkout ── */}
+        {/*  Right: Offers + Checkout  */}
         <div className="w-1/4 p-6 flex flex-col gap-4 min-w-0">
 
           <div className="flex-1 bg-slate-50 rounded-2xl shadow-md overflow-hidden relative border-4 border-amber-200 flex flex-col">
