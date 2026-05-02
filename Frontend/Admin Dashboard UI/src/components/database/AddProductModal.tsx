@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Plus, ChevronDown, Tag, Scale, Package, MapPin, Info } from 'lucide-react';
 
-// ── Rack data from ST001.json (will be fetched from DB later) ────────────────
+// Rack data from ST001.json (will be fetched from DB later)
 const RACK_DATA = [
   { rack_id: 'str001r01', name: 'R1 Fruits',              total_columns: 8,  category: 'Fruits',             color: '#d6b129' },
   { rack_id: 'str001r02', name: 'R2 Vegetables',          total_columns: 8,  category: 'Vegetables',         color: '#70c021' },
@@ -15,7 +15,7 @@ const RACK_DATA = [
   { rack_id: 'str001r10', name: 'R8 Frozen & Meat 1',     total_columns: 7,  category: 'Frozen & Meat',      color: '#67fcfe' },
 ];
 
-// ── Built-in categories ───────────────────────────────────────────────────────
+// Built-in categories
 const DEFAULT_CATEGORIES = [
   { id: 'C1', name: 'Fruits' },
   { id: 'C2', name: 'Vegetables' },
@@ -28,7 +28,7 @@ const DEFAULT_CATEGORIES = [
   { id: 'C9', name: 'Household Cleaning' },
 ];
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// Types 
 interface Category { id: string; name: string; }
 interface FormErrors { [key: string]: string; }
 
@@ -68,7 +68,7 @@ interface AddProductModalProps {
   editProduct?: ProductData | null; // null = add mode, ProductData = edit mode
 }
 
-// ── Blank form ────────────────────────────────────────────────────────────────
+//  Blank form 
 const EMPTY_FORM: ProductForm = {
   name: '', category_id: '', category_name: '',
   label_variants: [], weight_type: 'fixed',
@@ -76,7 +76,7 @@ const EMPTY_FORM: ProductForm = {
   rack_id: '', position_index: '', is_active: true,
 };
 
-// ── Convert saved product → form state ───────────────────────────────────────
+// load saved product into form
 function toForm(p: ProductData): ProductForm {
   return {
     name: p.name,
@@ -93,7 +93,7 @@ function toForm(p: ProductData): ProductForm {
   };
 }
 
-// ── UI primitives ─────────────────────────────────────────────────────────────
+//  UI primitives 
 function SectionHeader({ icon: Icon, label }: { icon: any; label: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, marginTop: 4 }}>
@@ -156,7 +156,7 @@ const inp = (error?: boolean): React.CSSProperties => ({
   boxSizing: 'border-box' as const,
 });
 
-// ════════════════════════════════════════════════════════════════════════════
+
 export default function AddProductModal({ isOpen, onClose, onSubmit, editProduct = null }: AddProductModalProps) {
   const isEditMode = editProduct != null;
 
@@ -301,7 +301,7 @@ export default function AddProductModal({ isOpen, onClose, onSubmit, editProduct
         <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-            {/* ── BASIC INFO ─────────────────────────────────────────────── */}
+            {/*BASIC INFO */}
             <SectionHeader icon={Package} label="Basic Info" />
 
             <Field label="Product Name" required error={errors.name}>
@@ -331,7 +331,7 @@ export default function AddProductModal({ isOpen, onClose, onSubmit, editProduct
               {form.category_name && <p style={{ fontSize: 11, color: '#06b6d4', margin: 0 }}>✓ {form.category_id} — {form.category_name}</p>}
             </Field>
 
-            {/* ── STATUS ─────────────────────────────────────────────────── */}
+            {/* STATUS */}
             <SectionHeader icon={Package} label="Status" />
 
             <Field label="Product Status" hint="Controls whether this product is visible and searchable in the store">
@@ -364,7 +364,7 @@ export default function AddProductModal({ isOpen, onClose, onSubmit, editProduct
               </button>
             </Field>
 
-            {/* ── SEARCH LABELS ──────────────────────────────────────────── */}
+            {/*SEARCH LABELS */}
             <SectionHeader icon={Tag} label="Search Labels" />
 
             <Field label="Label Variants" required error={errors.label_variants} hint="Add all names/aliases customers might use (including regional language names)">
@@ -386,7 +386,7 @@ export default function AddProductModal({ isOpen, onClose, onSubmit, editProduct
               )}
             </Field>
 
-            {/* ── WEIGHT & PRICING ───────────────────────────────────────── */}
+            {/* WEIGHT & PRICING  */}
             <SectionHeader icon={Scale} label="Weight & Pricing" />
 
             <Field label="Weight Type" required>
@@ -427,7 +427,7 @@ export default function AddProductModal({ isOpen, onClose, onSubmit, editProduct
               </Field>
             )}
 
-            {/* ── RACK PLACEMENT ─────────────────────────────────────────── */}
+            {/* RACK PLACEMENT */}
             <SectionHeader icon={MapPin} label="Rack Placement" />
 
             <Field label="Rack" required error={errors.rack_id}>

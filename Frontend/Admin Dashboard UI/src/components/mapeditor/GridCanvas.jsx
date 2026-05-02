@@ -262,9 +262,9 @@ export default function GridCanvas({
                       text={rack.name}
                       fill="#111"
                       fontSize={Math.max(10, stageSize.cellPx / 2.5)}
-                      rotation={isVertical ? -90 : 0}           // 🔄 rotate vertical racks
-                      x={isVertical ? pxW / 2 : 8}              // 📍 center horizontally
-                      y={isVertical ? pxH / 2 : pxH / 2}        // 📍 center vertically
+                      rotation={isVertical ? -90 : 0}           // rotate racks vertically
+                      x={isVertical ? pxW / 2 : 8}              //  center horizontally
+                      y={isVertical ? pxH / 2 : pxH / 2}        //  center vertically
                       offsetX={isVertical ? 0 : 0}
                       offsetY={isVertical ? 0 : 0}
                       align="center"
@@ -323,7 +323,7 @@ export default function GridCanvas({
                     verticalAlign="middle"
                     fontSize={Math.max(10, stageSize.cellPx / 2.5)}
                     fill="#ffffff"
-                    listening={false}   // 👈 IMPORTANT: text won’t block drag
+                    listening={false}   // allow drag even when clicking text
                     opacity={0.9}
                   />
                 </Group>
