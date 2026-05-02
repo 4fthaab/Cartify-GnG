@@ -18,8 +18,6 @@ export function QRLoginScreen({ onLogin }: QRLoginScreenProps) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  
-  // Track if the user has tried to submit, to trigger red borders
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
 
   // Validation Helpers
@@ -30,15 +28,15 @@ export function QRLoginScreen({ onLogin }: QRLoginScreenProps) {
     setAttemptedSubmit(true);
     setError("");
 
-    // --- 1. FRONTEND VALIDATION ---
+    // Frontend Validation
     
-    // Check for empty fields (Both Login and Signup)
+    // Checking for Empty Fields
     if (!emailOrPhone || !password || (!isLogin && !name)) {
       setError("Please fill in all required fields.");
       return; 
     }
 
-    // Signup-specific constraints
+    //Signup Constraints
     if (!isLogin) {
       if (password.length < 8) {
         setError("Password must be at least 8 characters long.");
@@ -51,8 +49,7 @@ export function QRLoginScreen({ onLogin }: QRLoginScreenProps) {
       }
     }
 
-    // --- 2. BACKEND API CALL ---
-    
+    //Backend API Call
     setLoading(true);
     try {
       if (isLogin) {
@@ -103,7 +100,7 @@ export function QRLoginScreen({ onLogin }: QRLoginScreenProps) {
 
         if (data.status === "success") {
           setIsLogin(true);
-          setAttemptedSubmit(false); // Reset validation UI
+          setAttemptedSubmit(false);
           setPassword(""); // Clear password for login
           setError("Account created! Please sign in.");
         } else {
@@ -118,8 +115,7 @@ export function QRLoginScreen({ onLogin }: QRLoginScreenProps) {
     setLoading(false);
   };
 
-  // --- UI Helpers ---
-  
+  // UI Helpers
   const toggleAuthMode = () => {
     setIsLogin(!isLogin);
     setError("");
@@ -131,14 +127,12 @@ export function QRLoginScreen({ onLogin }: QRLoginScreenProps) {
     const baseClass = "h-12 rounded-xl transition-colors";
     const errorClass = "border-red-500 focus-visible:ring-red-500";
     
-    // Show red if submitted AND (field is empty OR fails specific validation)
+    // Show red if submitted and field is empty or fails at specific validation
     if (attemptedSubmit && (!fieldValue || isFieldInvalid)) {
       return `${baseClass} ${errorClass}`;
     }
     return baseClass;
   };
-
-  // Check specific field invalid states for styling
   const isEmailPhoneInvalid = !isLogin && attemptedSubmit && emailOrPhone ? (!isValidEmail(emailOrPhone) && !isValidPhone(emailOrPhone)) : false;
   const isPasswordInvalid = !isLogin && attemptedSubmit && password ? password.length < 8 : false;
 
@@ -155,7 +149,7 @@ export function QRLoginScreen({ onLogin }: QRLoginScreenProps) {
 
         <div className="w-full max-w-sm space-y-4 mt-4">
 
-          {/* Name Field (Only for Signup) */}
+          {/* Name Field for Signup*/}
           {!isLogin && (
             <Input
               placeholder="Full Name"

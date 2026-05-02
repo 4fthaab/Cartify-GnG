@@ -20,26 +20,24 @@ export function OffersScreen({ onBack }: OffersScreenProps) {
   const [points, setPoints] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  const NEXT_REWARD_POINTS = 3000; // you can change tier logic later
+  const NEXT_REWARD_POINTS = 3000; 
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 🔥 Fetch Loyalty Points
+        //Fetch Loyalty Points
         if (user?.user_id) {
           const loyaltyRes = await fetch(`${API_BASE}/user/loyalty/${user.user_id}`);
           const loyaltyData = await loyaltyRes.json();
           setPoints(loyaltyData.loyalty_points || 0);
         }
-
-        // 🔥 Fetch Active Offers
+        //Fetch Active Offers
         const offerRes = await fetch(`${API_BASE}/offers/all`);
         const offerData = await offerRes.json();
         if (offerData.offers) {
           setOffers(offerData.offers);
         }
-
-        // 🔥 Fetch User Coupons
+        //Fetch User Coupons
         if (user?.user_id) {
           const couponRes = await fetch(`${API_BASE}/coupons/user/${user.user_id}`);
           const couponData = await couponRes.json();
@@ -92,7 +90,7 @@ export function OffersScreen({ onBack }: OffersScreenProps) {
 
         {!loading && (
           <>
-            {/* 🔥 Loyalty Points */}
+            {/* Loyalty Points */}
             <Card className="bg-gradient-to-br from-[#FF3347] to-[#FF5566] text-white p-6 rounded-2xl">
               <div className="flex items-start justify-between mb-4">
                 <div>
@@ -121,7 +119,7 @@ export function OffersScreen({ onBack }: OffersScreenProps) {
               </p>
             </Card>
 
-            {/* 🔥 Active Offers */}
+            {/* Active Offers */}
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <Tag className="w-5 h-5 text-[#FF3347]" />
@@ -148,7 +146,7 @@ export function OffersScreen({ onBack }: OffersScreenProps) {
               </div>
             </div>
 
-            {/* 🔥 User Coupons */}
+            {/* User Coupons */}
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <Gift className="w-5 h-5 text-[#FF3347]" />

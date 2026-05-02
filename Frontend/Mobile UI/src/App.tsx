@@ -16,18 +16,18 @@ export default function App() {
   const [cartItems, setCartItems] = useState(0);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isCartLinked, setIsCartLinked] = useState<boolean>(() => {
-    // Check if a cart session exists in storage on initialization
+    //checking if cart session exist or not.
     return localStorage.getItem("cart_session") !== null;
   }); 
   const [showReportModal, setShowReportModal] = useState(false);
 
-  // Restore session
+  //Restore session
   useEffect(() => {
     const stored = localStorage.getItem("user");
     if (stored) setUser(JSON.parse(stored));
   }, []);
 
-  // Apply dark mode globally to the HTML root
+  // Dark mode
   useEffect(() => {
     const root = window.document.documentElement;
     if (isDarkMode) {
@@ -37,27 +37,25 @@ export default function App() {
     }
   }, [isDarkMode]);
 
-  // Splash screen first
+  // intial loading splash screen
   if (!isSplashDone) {
     return <SplashScreen onFinish={() => setIsSplashDone(true)} />;
   }
 
-  // If not logged in → show login screen
   if (!user) {
     return <QRLoginScreen onLogin={(loggedUser) => setUser(loggedUser)} />;
   }
 
-  // Navigation handler
+  //Navigation handler
   const handleNavigate = (screen: string) => {
     if (screen === 'report') {
       setShowReportModal(true);
-    } else if (screen === 'splash') {
-      // ── LOGOUT SEQUENCE ──
-      setUser(null);              // Clear user state (triggers login screen later)
-      setIsSplashDone(false);     // Show the splash screen immediately
-      setCurrentScreen('home');   // Reset the background screen to home
-      setIsCartLinked(false);     // Unlink cart in UI
-      setCartItems(0);            // Reset cart items badge
+    } else if (screen === 'splash') {              //Logout section
+      setUser(null);              
+      setIsSplashDone(false);     
+      setCurrentScreen('home');   
+      setIsCartLinked(false);    
+      setCartItems(0);            
     }
     else {
       setCurrentScreen(screen);
@@ -74,8 +72,6 @@ export default function App() {
   };
 
   return (
-    // REMOVED: The outer centering div and the fixed width/height/rounded corners
-    // ADDED: w-full min-h-[100dvh] for true mobile edge-to-edge responsiveness
     <div className={`w-full min-h-[100dvh] bg-background flex flex-col ${isDarkMode ? 'dark' : ''}`}>
 
       {currentScreen === 'home' && (
