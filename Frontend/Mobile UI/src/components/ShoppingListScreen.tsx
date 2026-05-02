@@ -21,8 +21,8 @@ export function ShoppingListScreen({ onBack }: ShoppingListScreenProps) {
   const [newListName, setNewListName] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // 🔥 Fetch all lists
-  // 🔥 Fetch all lists
+  // Fetch all lists
+  // Fetch all lists
   useEffect(() => {
     if (!user?.user_id) return;
 
@@ -44,7 +44,7 @@ export function ShoppingListScreen({ onBack }: ShoppingListScreenProps) {
     fetchLists();
   }, [user?.user_id]); // Added user?.user_id to dependency array for best practice
 
-  // 🔥 Create New List
+  // Create New List
   const createList = async () => {
     if (!newListName.trim()) return;
 
@@ -67,7 +67,7 @@ export function ShoppingListScreen({ onBack }: ShoppingListScreenProps) {
     }
   };
 
-  // 🔥 Add Item
+  // Add Item
   const addItem = async () => {
     if (!newItem.trim() || !selectedList) return;
 
@@ -101,7 +101,7 @@ export function ShoppingListScreen({ onBack }: ShoppingListScreenProps) {
     refreshLists();
   };
 
-  // 🔥 Delete Entire List
+  // Delete Entire List
   const deleteList = async (list_id: string) => {
     await fetch(`${API_BASE}/shopping-list/delete`, {
       method: "POST",
@@ -115,8 +115,8 @@ export function ShoppingListScreen({ onBack }: ShoppingListScreenProps) {
     refreshLists();
   };
 
-  // 🔥 Refresh Lists
-  // 🔥 Refresh Lists
+  // Refresh Lists
+  // Refresh Lists
   const refreshLists = async () => {
     try {
       const res = await fetch(`${API_BASE}/shopping-list/get/${user.user_id}?include_empty=true`);
@@ -169,9 +169,9 @@ export function ShoppingListScreen({ onBack }: ShoppingListScreenProps) {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {/* Conditional Rendering: Show either ALL lists, or ONLY the selected list */}
+        {/* Conditional Rendering, it shows either all lists or only the selected list */}
         {!selectedList ? (
-          /* --- VIEW 1: ALL LISTS --- */
+          /*View 1: All list*/
           <div className="space-y-3">
             {lists.map((list) => (
               <Card
@@ -199,10 +199,10 @@ export function ShoppingListScreen({ onBack }: ShoppingListScreenProps) {
             ))}
           </div>
         ) : (
-          /* --- VIEW 2: SELECTED LIST DETAIL --- */
+          /*View 2: Selected List*/
           <div className="space-y-4">
 
-            {/* 1. Selected List Header (Clicking this clears the selection to show all lists again) */}
+            {/* 1. Selected List Header*/}
             <Card
               className="p-4 rounded-2xl border-2 border-[#FF3347] cursor-pointer"
               onClick={() => setSelectedList(null)}
@@ -229,7 +229,7 @@ export function ShoppingListScreen({ onBack }: ShoppingListScreenProps) {
               </div>
             </Card>
 
-            {/* 2. Add Item Input (Appears directly below the selected list header) */}
+            {/* 2. Add Item Input */}
             <Card className="p-4 rounded-2xl">
               <div className="flex gap-2">
                 <Input
@@ -245,7 +245,7 @@ export function ShoppingListScreen({ onBack }: ShoppingListScreenProps) {
               </div>
             </Card>
 
-            {/* 3. Selected List Items (Linear styling instead of 2-column cards) */}
+            {/* 3. Selected List Items */}
             <div className="space-y-2 px-2">
               {selectedList.items.map((item: any, index: number) => (
                 <div
