@@ -71,7 +71,7 @@ export default function App() {
 
     const newRack = {
       type: "rack",
-      rack_id: null,   // 🔴 TEMP, will be generated on save
+      rack_id: null,   //  TEMP, will be generated on save
       name: "",
       x: 0,
       y: 0,

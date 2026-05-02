@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Badge } from '../ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
 
-// ── Types ─────────────────────────────────────────────────────────────────
+// Types 
 interface Enquiry {
   id: number;
   name: string;
@@ -32,7 +32,7 @@ interface Complaint {
   date: string;
 }
 
-// ── Static data ────────────────────────────────────────────────────────────
+// Static data 
 const initialEnquiries: Enquiry[] = [
   {
     id: 1, name: 'Afthab Rahman', email: 'afthab@example.com',
@@ -87,7 +87,7 @@ const initialComplaints: Complaint[] = [
   },
 ];
 
-// ── Status config (no priority) ────────────────────────────────────────────
+// Status config (no priority) 
 const statusConfig: Record<ComplaintStatus, { icon: React.ElementType; style: React.CSSProperties }> = {
   Open:        { icon: AlertTriangle, style: { background: 'rgba(239,68,68,0.12)',  color: '#f87171', border: '1px solid rgba(239,68,68,0.35)'  } },
   'In Progress': { icon: Clock,       style: { background: 'rgba(234,179,8,0.12)', color: '#fbbf24', border: '1px solid rgba(234,179,8,0.35)'  } },
@@ -113,7 +113,7 @@ function StarRating({ rating }: { rating: number }) {
 }
 
 
-// ── Main component ─────────────────────────────────────────────────────────
+// Main component 
 export default function Enquiries() {
   // Reviews state
   const [enquiries, setEnquiries] = useState<Enquiry[]>(initialEnquiries);
@@ -162,9 +162,7 @@ export default function Enquiries() {
   return (
     <div className="space-y-12">
 
-      {/* ══════════════════════════════════════════════════
-          SECTION 1 — Customer Reviews
-      ══════════════════════════════════════════════════ */}
+      {/* SECTION 1 — Customer Reviews*/}
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-4">
@@ -248,9 +246,7 @@ export default function Enquiries() {
       {/* Divider */}
       <div className="border-t border-slate-700/60" />
 
-      {/* ══════════════════════════════════════════════════
-          SECTION 2 — Customer Complaints
-      ══════════════════════════════════════════════════ */}
+      {/* SECTION 2 — Customer Complaints */}
       <div className="space-y-6">
         {/* Sub-header */}
         <div className="flex items-center justify-between flex-wrap gap-4">
