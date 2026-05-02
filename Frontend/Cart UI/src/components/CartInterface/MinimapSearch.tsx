@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { BASE_URL, CART_ID, STORE_ID } from "@/config";
 
-// ─── Utility: Compute Exact Pickup Point ─────────────────────────────────────
+//  Utility: Compute Exact Pickup Point 
 const computePickupPoint = (rackId: string, positionIndex: number, layout: any) => {
   const rack = layout.elements.find((e: any) => e.type === "rack" && e.rack_id === rackId);
   if (!rack) return null;
@@ -35,7 +35,7 @@ const computePickupPoint = (rackId: string, positionIndex: number, layout: any) 
   return { x: px, y: py };
 };
 
-// ─── Utility: BFS Pathfinding (Walkable Grid) ────────────────────────────────
+//  Utility: BFS Pathfinding (Walkable Grid)
 function findWalkablePath(layout: any, points: { x: number; y: number }[]) {
   if (!layout || !points || points.length < 2) return [];
 
@@ -87,7 +87,7 @@ function findWalkablePath(layout: any, points: { x: number; y: number }[]) {
   return fullPath;
 }
 
-// ─── Map Component ───────────────────────────────────────────────────────────
+//  Map Component
 const LargeDynamicStoreMap = ({ layout, cartDisplay, highlightedItem, optimizedPath }: any) => {
   if (!layout) return <div className="h-full flex items-center justify-center text-slate-400">Loading Map...</div>;
 
@@ -98,7 +98,7 @@ const LargeDynamicStoreMap = ({ layout, cartDisplay, highlightedItem, optimizedP
   const entryNode = layout.elements.find((e: any) => e.zoneType === "entry");
   const billingNode = layout.elements.find((e: any) => e.zoneType === "billing");
 
-  // FIX: Force coordinates to be integers (Math.round) so the BFS Grid doesn't break
+  //  Force coordinates to be integers (Math.round) so the BFS Grid doesn't break
   const effectiveCartLocation = cartDisplay?.current_location
     ? { x: Math.round(cartDisplay.current_location.x), y: Math.round(cartDisplay.current_location.y) }
     : (entryNode ? { x: entryNode.x + Math.floor(entryNode.w / 2), y: entryNode.y } : null);
@@ -228,7 +228,7 @@ const LargeDynamicStoreMap = ({ layout, cartDisplay, highlightedItem, optimizedP
           );
         })}
 
-        {/* --- Simple Dots with Directional "Stubs" to the Rack --- */}
+        {/*  Simple Dots with Directional "Stubs" to the Rack  */}
         {pendingOptimizedPath.map((op: any, idx: number) => {
           if (!op.pickup_point) return null;
 
@@ -260,7 +260,7 @@ const LargeDynamicStoreMap = ({ layout, cartDisplay, highlightedItem, optimizedP
           );
         })}
 
-        {/* --- Searched Item Target Marker with Pointer Stub --- */}
+        {/*  Searched Item Target Marker with Pointer Stub  */}
         {searchTargetPoint && (() => {
           const cx = searchTargetPoint.x * CELL + CELL / 2;
           const cy = searchTargetPoint.y * CELL + CELL / 2;
@@ -302,7 +302,7 @@ const LargeDynamicStoreMap = ({ layout, cartDisplay, highlightedItem, optimizedP
 };
 
 
-// ─── Main Interface ──────────────────────────────────────────────────────────
+//  Main Interface  
 export const MinimapSearch = ({ onNext }: { onNext: (itemName?: string) => void }) => {
   const [layout, setLayout] = useState<any>(null);
   const [inventoryDB, setInventoryDB] = useState<any[]>([]);
@@ -314,11 +314,11 @@ export const MinimapSearch = ({ onNext }: { onNext: (itemName?: string) => void 
   const [showAddItemDialog, setShowAddItemDialog] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
 
-  // --- NEW: Add state for User ID and Optimized Path ---
+  //   Add state for User ID and Optimized Path 
   const [userId, setUserId] = useState<string | null>(null);
   const [optimizedPath, setOptimizedPath] = useState<any[]>([]);
 
-  // --- NEW: Read User ID from LocalStorage ---
+  //  Read User ID from LocalStorage 
   useEffect(() => {
     try {
       const raw = localStorage.getItem("cart_user");
@@ -329,8 +329,8 @@ export const MinimapSearch = ({ onNext }: { onNext: (itemName?: string) => void 
     } catch { /* guest */ }
   }, []);
 
-  // --- NEW: Fetch Optimized Path from Backend ---
-  // --- FIX 1: Dynamically sync User ID ---
+  //  Fetch Optimized Path from Backend 
+  //   Dynamically sync User ID 
   useEffect(() => {
     const syncUser = () => {
       // Prefer the backend's source of truth if a list is linked
@@ -354,13 +354,13 @@ export const MinimapSearch = ({ onNext }: { onNext: (itemName?: string) => void 
   }, [cartDisplay?.linked_user_id, userId]);
 
 
-  // --- FIX 2: Clear stale path if the user switches lists ---
+  //  Clear stale path if the user switches lists 
   useEffect(() => {
     setOptimizedPath([]); // Reset local path whenever the linked list ID changes
   }, [cartDisplay?.linked_list_id]);
 
 
-  // --- FIX 3: Continuously fetch Optimized Path until found ---
+  //   Continuously fetch Optimized Path until found
   useEffect(() => {
     const hasBackendPath = cartDisplay?.optimized_path && cartDisplay.optimized_path.length > 0;
     const hasLocalPath = optimizedPath && optimizedPath.length > 0;
@@ -460,7 +460,7 @@ export const MinimapSearch = ({ onNext }: { onNext: (itemName?: string) => void 
     }, 3000);
   };
 
-  // --- NEW: Add Item to List & Recalculate Path ---
+  //  Add Item to List & Recalculate Path 
   const handleAddToList = async () => {
     if (!userId || !cartDisplay?.linked_list_id || !highlightedItem) return;
 
@@ -473,12 +473,12 @@ export const MinimapSearch = ({ onNext }: { onNext: (itemName?: string) => void 
         body: JSON.stringify({
           user_id: userId,
           list_id: cartDisplay.linked_list_id,
-          item_name: highlightedItem.name // <-- FIXED: Now matches Python backend
+          item_name: highlightedItem.name 
         }),
       });
 
       // 2. Force the backend to sync the updated list with the active cart.
-      // This automatically recalculates the A* path and updates the cart DB!
+      // This automatically recalculates the A* path and updates the cart DB
       await fetch(`${BASE_URL}/shopping-list/select`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -489,8 +489,8 @@ export const MinimapSearch = ({ onNext }: { onNext: (itemName?: string) => void 
         }),
       });
 
-      // (Note: We don't need to manually setOptimizedPath here because 
-      // the pollCart interval will catch the updated DB in ~1 second!)
+       
+      
 
       // 3. Clear the search and the orange detour highlight
       const addedItemName = highlightedItem.name;

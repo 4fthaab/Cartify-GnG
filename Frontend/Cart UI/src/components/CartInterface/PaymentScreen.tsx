@@ -98,7 +98,7 @@ export const PaymentScreen = ({ paymentData, onBack, onDone }: PaymentScreenProp
     );
   }
 
-  // View: Success → show receipt
+  // View: Success - show receipt
   if (phase === "success") {
     return (
       <ReceiptScreen
@@ -111,7 +111,7 @@ export const PaymentScreen = ({ paymentData, onBack, onDone }: PaymentScreenProp
     );
   }
 
-  // View: Pending → show QR for mobile to scan
+  // View: Pending - show QR for mobile to scan
   return (
     <div className="h-screen w-screen flex items-center justify-center bg-green-50">
       <div className="bg-white p-10 rounded-3xl shadow-2xl flex flex-col items-center justify-center text-center min-w-[380px] max-w-md w-full">

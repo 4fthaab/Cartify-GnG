@@ -4,8 +4,8 @@ import { MinimapSearch } from "@/components/CartInterface/MinimapSearch";
 import { MainInterface } from "@/components/CartInterface/MainInterface";
 import { BillingScreen } from "@/components/CartInterface/BillingScreen";
 import { PaymentScreen } from "@/components/CartInterface/PaymentScreen";
-import { RatingScreen } from "@/components/CartInterface/RatingScreen"; // <-- 1. Import new screen
-import { HelpModal } from "@/components/CartInterface/HelpModal"; // <-- 2. Import Help Modal
+import { RatingScreen } from "@/components/CartInterface/RatingScreen"; // 1. Import new screen
+import { HelpModal } from "@/components/CartInterface/HelpModal"; // 2. Import Help Modal
 
 const INACTIVITY_MS = 60_000; // 1 minute
 
@@ -76,10 +76,10 @@ const Index = () => {
           <MainInterface
             onBack={() => goTo(1)}
             onRouteReady={() => goTo(1)}
-            recentlyAddedItem={recentlyAddedItem}                  // <-- Pass it down
+            recentlyAddedItem={recentlyAddedItem}                  //  Pass it down
             clearRecentlyAdded={() => setRecentlyAddedItem(null)}
             onCheckout={(items, total) => {
-              setCheckoutData({ items, total }); // <-- Save the items here
+              setCheckoutData({ items, total }); // Save the items here
               goTo(3);
             }}
             isPollingPaused={currentScreen >= 3}
@@ -89,8 +89,8 @@ const Index = () => {
         {/* Screen 3 – Billing Screen */}
         <div className="min-w-full h-full">
           <BillingScreen
-            cartItems={checkoutData.items}     // <-- Inject items
-            totalAmount={checkoutData.total}   // <-- Inject total
+            cartItems={checkoutData.items}     //  Inject items
+            totalAmount={checkoutData.total}   //  Inject total
             onBack={() => goTo(2)}
             onDone={(data) => {
               setPaymentData(data);
@@ -103,7 +103,7 @@ const Index = () => {
             <PaymentScreen
               paymentData={paymentData}
               onBack={() => goTo(3)}
-              onDone={() => goTo(5)} // <-- 4. Change this from goTo(0) to goTo(5) to show Rating Screen
+              onDone={() => goTo(5)} // 4. Change this from goTo(0) to goTo(5) to show Rating Screen
             />
           ) : (
             <div className="flex items-center justify-center h-full bg-slate-50">
