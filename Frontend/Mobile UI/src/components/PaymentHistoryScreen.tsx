@@ -64,10 +64,9 @@ export function PaymentHistoryScreen({ onBack }: Props) {
           </div>
         </div>
 
-        {/* Professional Centered Summary Dashboard */}
+        {/*Summary Dashboard*/}
         <div className="flex justify-center items-center mt-2">
           <div className="w-full max-w-sm bg-gradient-to-br from-[#FF3347] to-[#FF5566] rounded-3xl p-6 text-white shadow-lg shadow-[#FF3347]/20 relative overflow-hidden">
-            {/* Subtle Background Decoration */}
             <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
             
             <div className="flex flex-col items-center justify-center text-center relative z-10">
@@ -114,8 +113,6 @@ export function PaymentHistoryScreen({ onBack }: Props) {
             return (
               <div key={pay.payment_id} className="bg-card border border-border rounded-2xl p-4">
                 <div className="flex items-center gap-4">
-                  
-                  {/* Dynamic Icon based on method */}
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
                     isSuccess ? "bg-green-500/5 text-green-600" : "bg-yellow-500/5 text-yellow-600"
                   }`}>

@@ -24,7 +24,7 @@ export function RecentOrdersScreen({ onBack }: Props) {
   const stored = localStorage.getItem("user");
   const user = stored ? JSON.parse(stored) : null;
 
-  // 🔥 Fetch orders from backend
+  // Fetch orders from backend
   useEffect(() => {
     if (!user?.user_id) return;
 
@@ -47,17 +47,15 @@ export function RecentOrdersScreen({ onBack }: Props) {
 
   const selected = orders.find(o => o.order_id === selectedOrder);
 
-  // 🔥 Fetch Store Name when an order is selected
+  //Fetch Store Name when an order is selected
   useEffect(() => {
     if (selected?.store_id) {
       const fetchStoreName = async () => {
         try {
           const res = await fetch(`${API_BASE}/store/${selected.store_id}`);
           const data = await res.json();
-          // Adjust based on your actual backend response structure
           setStoreName(data.name || data.store?.name || `${selected.store_id}`);
         } catch (err) {
-          // Fallback if the endpoint fails or doesn't exist yet
           setStoreName(`Store ${selected.store_id}`);
         }
       };
@@ -65,7 +63,7 @@ export function RecentOrdersScreen({ onBack }: Props) {
     }
   }, [selected?.store_id]);
 
-  // ───────── ORDER DETAIL VIEW (With Print Layout) ─────────
+  // ORDER SECTION
   if (selected) {
     const subtotal = selected.total_price;
     const tax = subtotal * 0.08;
@@ -73,7 +71,7 @@ export function RecentOrdersScreen({ onBack }: Props) {
     return (
       <div className="min-h-[100dvh] w-full flex flex-col bg-background print:bg-white print:text-black">
 
-        {/* --- App Header (Hidden on Print) --- */}
+        {/* App Header*/}
         <div className="px-6 py-4 border-b border-border print:hidden shrink-0">
           <div className="flex items-center gap-4">
             <button
@@ -86,7 +84,7 @@ export function RecentOrdersScreen({ onBack }: Props) {
               <h2 className="font-semibold text-foreground text-lg">Order Details</h2>
               <p className="text-xs text-muted-foreground">{selected.order_id}</p>
             </div>
-            {/* Print / Save PDF Button */}
+            {/* Print or Save as pdf*/}
             <button
               onClick={() => window.print()}
               className="w-10 h-10 bg-[#FF3347]/10 text-[#FF3347] rounded-full flex items-center justify-center hover:bg-[#FF3347]/20 transition-colors"
@@ -96,13 +94,9 @@ export function RecentOrdersScreen({ onBack }: Props) {
             </button>
           </div>
         </div>
-
-        {/* --- Scrollable Body (Centered for Print) --- */}
         <div className="flex-1 overflow-y-auto print:overflow-visible px-6 py-6 print:py-8 print:max-w-md print:mx-auto print:w-full space-y-6">
           <div className="flex justify-center items-center">
-            {/* Added flex, flex-col, and items-center here */}
             <div className="flex flex-col items-center">
-              {/* Minimal Image Logo */}
               <img
                 src="../../assets/logo.png"
                 alt="Grab n Go Logo"
@@ -127,7 +121,7 @@ export function RecentOrdersScreen({ onBack }: Props) {
             </p>
           </div>
 
-          {/* --- Order Info Cards --- */}
+          {/*Order information Cards*/}
           <div className="bg-card border border-border rounded-2xl p-5 space-y-4 print:border-none print:shadow-none print:p-0 print:space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -172,7 +166,7 @@ export function RecentOrdersScreen({ onBack }: Props) {
             </div>
           </div>
 
-          {/* --- Items List --- */}
+          {/*Item List*/}
           <div>
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 print:text-black print:border-b-2 print:border-black print:pb-2">
               Items Purchased
@@ -197,7 +191,7 @@ export function RecentOrdersScreen({ onBack }: Props) {
             </div>
           </div>
 
-          {/* --- Bill Summary --- */}
+          {/* Bill Summary*/}
           <div className="pt-3 flex justify-between items-center">
             <span className="font-semibold text-foreground print:text-black">Total Paid</span>
             <span className="text-xl font-bold text-[#FF3347] print:text-black">
@@ -205,7 +199,7 @@ export function RecentOrdersScreen({ onBack }: Props) {
             </span>
           </div>
 
-          {/* --- Print Footer --- */}
+          {/* Print Footer*/}
           <div className="hidden print:block text-center mt-12 pt-6 border-t-2 border-dashed border-gray-300 text-xs text-gray-500">
             <p className="font-medium text-black mb-1">Thank you for shopping!</p>
             <p>If you have any questions about your order,</p>
@@ -218,7 +212,7 @@ export function RecentOrdersScreen({ onBack }: Props) {
     );
   }
 
-  // ───────── LIST VIEW ─────────
+  //LIST SECTION
   return (
     <div className="min-h-[100dvh] w-full flex flex-col bg-background">
 

@@ -3,8 +3,7 @@ import { Button } from './ui/button';
 import { useState, useEffect, useRef } from 'react';
 import { Html5Qrcode } from "html5-qrcode";
 
-// --- 1. IMPORT AUDIO CORRECTLY ---
-// This tells Vite to handle the path correctly regardless of where the app is hosted
+
 import paymentTune from '../../assets/paytm_payment_tune.mp3';
 
 const API_BASE = "http://10.211.103.220:8000";
@@ -50,7 +49,7 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked 
     }
   }, [isCartLinked]);
 
-  // --- Scanning Logic ---
+  // Scanner Section
   useEffect(() => {
     if (isScanning) {
       const html5QrCode = new Html5Qrcode("qr-reader");
@@ -92,7 +91,7 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked 
     } catch (err) { alert("Failed to connect to cart"); }
   };
 
-  // --- Live Polling ---
+  //Live Sesssion
   useEffect(() => {
     if (!isLinked || isScanningPayment || paymentDone) return;
     const session = JSON.parse(localStorage.getItem("cart_session") || "{}");
@@ -134,7 +133,7 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked 
     return () => clearInterval(interval);
   }, [isLinked, paymentDone]);
 
-  // --- Payment Camera ---
+  //Payment section
   useEffect(() => {
     if (!isScanningPayment) return;
     const html5QrCode = new Html5Qrcode("payment-qr-reader");
@@ -184,13 +183,11 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked 
     } catch (err) { console.error("Payment completion failed", err); setIsScanningPayment(false); }
   };
 
-  // --- 2. IMPROVED SUCCESS EFFECT ---
+
   useEffect(() => {
     if (paymentDone) {
-      // Trigger Haptics
       triggerHaptic('success');
 
-      // Play Sound Safely
       try {
         const audio = new Audio(paymentTune);
         audio.volume = 0.6;
@@ -199,7 +196,7 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked 
         console.error("Audio system error:", err);
       }
 
-      // Auto-redirect after 4 seconds
+      // Auto redirect back
       const timer = setTimeout(() => {
         localStorage.removeItem("cart_session");
         setPaymentDone(false);
@@ -213,7 +210,7 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked 
     }
   }, [paymentDone, onBack, onCartUnlinked]);
 
-  // --- Render Views ---
+  // Rendering View Section 
 
   if (isScanning) {
     return (
@@ -264,7 +261,6 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked 
 
   if (isScanningPayment) {
     return (
-      // 1. Fixed Layout: Changed 'h-screen' to 'h-full flex-1' to fit inside App.tsx
       <div className="h-full flex-1 w-full flex flex-col bg-background overflow-hidden">
 
         {/* Header */}
@@ -291,7 +287,7 @@ export function CartScreen({ onBack, isCartLinked, onCartLinked, onCartUnlinked 
           <div className="relative w-full aspect-square max-w-[300px] overflow-hidden rounded-[1.5rem] shadow-2xl bg-black border-[6px] border-card shrink-0">
             <div id="payment-qr-reader" className="w-full h-full object-cover opacity-80" />
 
-            {/* Visual Overlays */}
+            {/* Overlays */}
             <div className="absolute inset-0 pointer-events-none">
               <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-green-400 to-transparent shadow-[0_0_15px_rgba(74,222,128,0.8)] animate-scan-loop" />
               <div className="flex items-center justify-center h-full">

@@ -46,12 +46,11 @@ export function HomeScreen({ onNavigate, cartItems, isDarkMode, onToggleTheme, i
     fetchOffers();
   }, []);
 
-  // ── Logout Logic ────────────────────────────────────────────────
-// ── Logout Logic ────────────────────────────────────────────────
+//Logout Section
   const handleLogout = async () => {
     const cartSession = JSON.parse(localStorage.getItem("cart_session") || "{}");
 
-    // 1. If a cart is linked, attempt to log out of it on the backend
+    //If a cart is linked and attempted to log out of it on the backend
     if (cartSession.cart_id) {
       try {
         const res = await fetch(`${API_BASE}/cart/logout`, {
@@ -60,24 +59,19 @@ export function HomeScreen({ onNavigate, cartItems, isDarkMode, onToggleTheme, i
           body: JSON.stringify({ cart_id: cartSession.cart_id })
         });
         const data = await res.json();
-
-        // 🚨 NEW: Abort logout if the backend rejects it (e.g., items in cart)
+        //Abort logout if the backend rejects it
         if (data.error) {
           alert(data.error);
-          return; // Stop the logout process here
+          return; 
         }
       } catch (err) {
         console.error("Failed to logout cart on backend", err);
         alert("Network error. Please try again.");
-        return; // Don't force logout if we can't verify cart state
+        return; 
       }
     }
-
-    // 2. Clear local storage to reset user state (Only happens if API succeeds or no cart linked)
-    localStorage.removeItem("user");
+    localStorage.removeItem("user");        // Clearlocal storage to reset user state
     localStorage.removeItem("cart_session");
-
-    // 3. Navigate back to Splash Screen
     onNavigate('splash');
   };
 
