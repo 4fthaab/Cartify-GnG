@@ -1,9 +1,10 @@
-// src/App.jsx
 import React, { useState, useRef, useEffect } from "react";
+import Swal from 'sweetalert2';
 import GridCanvas from "../components/mapeditor/GridCanvas";
 import RackModal from "../components/mapeditor/RackModal";
 import BlockedAreaModal from "../components/mapeditor/BlockedAreaModal";
 import AisleMarkerModal from "../components/mapeditor/AisleMarkerModal";
+import { adminService } from '../services/adminServices';
 
 const btn = (bg) => ({
   backgroundColor: bg,
@@ -34,7 +35,7 @@ const labelStyle = {
   display: "block",
 };
 
-export default function App() {
+export default function MapEditorPage({ initialLayout }) {
   const FEET_PER_CELL = 3;
   const [storeArea, setStoreArea] = useState({ lengthFt: 75, widthFt: 30 });
   const [elements, setElements] = useState([]);
@@ -45,10 +46,25 @@ export default function App() {
   const [selected, setSelected] = useState(null);
   const [editingAisle, setEditingAisle] = useState(null);
   const [showWalkable, setShowWalkable] = useState(false);
-
+  const [isSaving, setIsSaving] = useState(false);
 
   const lengthRef = useRef(storeArea.lengthFt);
   const widthRef = useRef(storeArea.widthFt);
+
+  useEffect(() => {
+    if (initialLayout && initialLayout.floor_area) {
+      setStoreArea({
+        lengthFt: initialLayout.floor_area.length_ft,
+        widthFt: initialLayout.floor_area.width_ft
+      });
+      if (lengthRef.current) lengthRef.current.value = initialLayout.floor_area.length_ft;
+      if (widthRef.current) widthRef.current.value = initialLayout.floor_area.width_ft;
+      
+      if (initialLayout.elements) {
+        setElements(initialLayout.elements);
+      }
+    }
+  }, [initialLayout]);
 
   const gridSize = {
     length: Math.ceil(storeArea.lengthFt / FEET_PER_CELL),
@@ -71,7 +87,7 @@ export default function App() {
 
     const newRack = {
       type: "rack",
-      rack_id: null,   //  TEMP, will be generated on save
+      rack_id: null,
       name: "",
       x: 0,
       y: 0,
@@ -103,11 +119,9 @@ export default function App() {
 
       setElements(prev =>
         prev
-          // First: remove rack if selected
           .filter(el =>
             !(el.type === "rack" && el.rack_id === selected)
           )
-          // Then: clean aisle markers
           .map(el => {
             if (el.type === "aisle_marker") {
               if (el.left_rack_id === selected) el.left_rack_id = null;
@@ -115,13 +129,11 @@ export default function App() {
             }
             return el;
           })
-          // Finally: remove aisle marker if both sides null
           .filter(el =>
             el.type !== "aisle_marker" ||
             el.left_rack_id ||
             el.right_rack_id
           )
-          // Also allow deleting blocked or aisle directly
           .filter(el =>
             el.id !== selected
           )
@@ -133,7 +145,6 @@ export default function App() {
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [selected]);
-
 
   const generateRackId = (storeId, elements) => {
     const racks = elements.filter(el => el.type === "rack");
@@ -195,7 +206,7 @@ export default function App() {
         : generateRackId("str001", prev);
 
       const updatedRack = {
-        ...editing,          // preserves x, y
+        ...editing,
         type: "rack",
         rack_id,
         name: meta.name,
@@ -211,8 +222,8 @@ export default function App() {
       };
 
       return isNew
-        ? [...prev, updatedRack]   // ✅ INSERT
-        : prev.map((el) =>         // ✅ UPDATE
+        ? [...prev, updatedRack]
+        : prev.map((el) =>
           el.type === "rack" && el.rack_id === rack_id
             ? updatedRack
             : el
@@ -226,8 +237,9 @@ export default function App() {
   const normalizeAisleName = (name) =>
     name
       .toLowerCase()
-      .replace(/\s+/g, "")   // remove ALL spaces
+      .replace(/\s+/g, "")
       .trim();
+
   const saveAisle = (form) => {
     const normalized = normalizeAisleName(form.aisle_name);
     if (!normalized) {
@@ -252,7 +264,6 @@ export default function App() {
       return;
     }
 
-    // NEW
     if (!form.id) {
       const id = getNextArucoId();
       if (!id) return;
@@ -267,7 +278,6 @@ export default function App() {
         },
       ]);
     } else {
-      // UPDATE
       setElements(prev =>
         prev.map(el =>
           el.type === "aisle_marker" && el.id === form.id
@@ -301,8 +311,8 @@ export default function App() {
     return null;
   };
 
-  const exportJSON = () => {
-    const out = {
+  const buildLayoutPayload = () => {
+    return {
       version: "1.0",
       floor_area: {
         length_ft: storeArea.lengthFt,
@@ -311,56 +321,72 @@ export default function App() {
       },
       elements: elements.map((el) => {
         if (el.type === "rack") {
-          return {
-            type: "rack",
-            rack_id: el.rack_id,
-            name: el.name,
-            x: el.x,
-            y: el.y,
-            w: el.w,
-            h: el.h,
-            meta: el.meta,
-          };
+          return { type: "rack", rack_id: el.rack_id, name: el.name, x: el.x, y: el.y, w: el.w, h: el.h, meta: el.meta };
         }
-
         if (el.type === "blocked") {
-          return {
-            type: "blocked",
-            id: el.id,
-            x: el.x,
-            y: el.y,
-            w: el.w,
-            h: el.h,
-            label: el.label || "Blocked",
-            zoneType: el.zoneType || "wall",
-          };
+          return { type: "blocked", id: el.id, x: el.x, y: el.y, w: el.w, h: el.h, label: el.label || "Blocked", zoneType: el.zoneType || "wall" };
         }
-
         if (el.type === "aisle_marker") {
-          return {
-            type: "aisle_marker",
-            id: el.id,
-            aisle_name: el.aisle_name,
-            x: el.x,
-            y: el.y,
-            left_rack_id: el.left_rack_id,
-            right_rack_id: el.right_rack_id,
-          };
+          return { type: "aisle_marker", id: el.id, aisle_name: el.aisle_name, x: el.x, y: el.y, left_rack_id: el.left_rack_id, right_rack_id: el.right_rack_id };
         }
-
         return el;
       }),
       last_updated: new Date().toISOString(),
     };
+  };
 
-    const blob = new Blob([JSON.stringify(out, null, 2)], {
-      type: "application/json",
+  const saveToDatabase = async () => {
+    const result = await Swal.fire({
+      title: 'Save Layout?',
+      text: "This will update the current store layout in the database.",
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#0284c7',
+      cancelButtonColor: '#4b5563',
+      confirmButtonText: 'Yes, save it!',
+      background: '#1e293b',
+      color: '#f1f5f9'
     });
 
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "store-layout.json";
-    a.click();
+    if (!result.isConfirmed) return;
+
+    setIsSaving(true);
+    const layoutPayload = buildLayoutPayload();
+
+    try {
+      const res = await adminService.saveLayout(layoutPayload);
+      
+      if (res.status === 'success') {
+        Swal.fire({
+          title: 'Saved!',
+          text: 'Layout saved to database successfully.',
+          icon: 'success',
+          timer: 2000,
+          showConfirmButton: false,
+          background: '#1e293b',
+          color: '#f1f5f9'
+        });
+      } else {
+        Swal.fire({
+          title: 'Error',
+          text: 'Failed to save layout. Please try again.',
+          icon: 'error',
+          background: '#1e293b',
+          color: '#f1f5f9'
+        });
+      }
+    } catch (error) {
+      console.error(error);
+      Swal.fire({
+        title: 'System Error',
+        text: 'An unexpected error occurred while connecting to the database.',
+        icon: 'error',
+        background: '#1e293b',
+        color: '#f1f5f9'
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const applyArea = () => {
@@ -373,94 +399,20 @@ export default function App() {
     setStoreArea({ lengthFt: l, widthFt: w });
   };
 
-  const importJSON = (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const data = JSON.parse(ev.target.result);
-
-        const area = data.floor_area || data.store;
-        if (!area || !Array.isArray(data.elements)) {
-          alert("Invalid layout JSON");
-          return;
-        }
-
-        setStoreArea({
-          lengthFt: area.length_ft,
-          widthFt: area.width_ft,
-        });
-
-        const imported = data.elements.map((el) => {
-          if (el.type === "rack") {
-            return {
-              type: "rack",
-              rack_id: el.rack_id,
-              name: el.name,
-              x: el.x,
-              y: el.y,
-              w: el.w,
-              h: el.h,
-              meta: el.meta,
-            };
-          }
-
-          if (el.type === "blocked") {
-            return {
-              type: "blocked",
-              id: el.id || `blk-${Date.now()}`,
-              x: el.x,
-              y: el.y,
-              w: el.w,
-              h: el.h,
-              label: el.label || "Blocked",
-              zoneType: el.zoneType || "wall",
-            };
-          }
-          if (el.type === "aisle_marker") {
-            return {
-              type: "aisle_marker",
-              id: el.id,
-              aisle_name: el.aisle_name,
-              x: el.x,
-              y: el.y,
-              left_rack_id: el.left_rack_id || null,
-              right_rack_id: el.right_rack_id || null,
-            };
-          }
-          return el;
-        });
-
-        setElements(imported);
-      } catch (err) {
-        alert("Failed to import layout");
-      }
-    };
-
-    reader.readAsText(f);
-  };
-
   const getAdjacentRacks = (x, y) => {
     const racks = elements.filter(el => el.type === "rack");
-
     const found = [];
-
     const adjacentCells = [
-      { x: x - 1, y }, // left
-      { x: x + 1, y }, // right
-      { x, y: y - 1 }, // top
-      { x, y: y + 1 }, // bottom
+      { x: x - 1, y },
+      { x: x + 1, y },
+      { x, y: y - 1 },
+      { x, y: y + 1 },
     ];
 
     racks.forEach(rack => {
       adjacentCells.forEach(cell => {
-        const insideX =
-          cell.x >= rack.x && cell.x < rack.x + rack.w;
-
-        const insideY =
-          cell.y >= rack.y && cell.y < rack.y + rack.h;
+        const insideX = cell.x >= rack.x && cell.x < rack.x + rack.w;
+        const insideY = cell.y >= rack.y && cell.y < rack.y + rack.h;
 
         if (insideX && insideY) {
           if (!found.includes(rack.rack_id)) {
@@ -479,7 +431,6 @@ export default function App() {
   return (
     <div style={{ padding: "20px", background: "#0f172a", minHeight: "100%" }}>
 
-      {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
       <div style={{ display: "flex", justifyContent:"center", gap: "10px", marginBottom: "16px", alignItems: "flex-end", flexWrap: "wrap" }}>
 
         <div>
@@ -492,16 +443,10 @@ export default function App() {
           <input ref={widthRef} defaultValue={storeArea.widthFt} style={inputStyle} />
         </div>
 
-        <button onClick={applyArea}  style={btn("#374151")}>Apply Area</button>
+        <button onClick={applyArea} style={btn("#374151")}>Apply Area</button>
         <button onClick={createRack} style={btn("#2563eb")}>Add Rack</button>
         <button onClick={() => setMode("blocked")} style={btn("#dc2626")}>Add Blocked Area</button>
-        <button onClick={exportJSON} style={btn("#16a34a")}>Export JSON</button>
-
-        <label style={{ ...btn("#ea580c"), display: "inline-block" }}>
-          Import JSON
-          <input type="file" accept="application/json" onChange={importJSON} style={{ display: "none" }} />
-        </label>
-
+        
         <button onClick={() => setMode("aisle_marker")} style={btn("#4f46e5")}>
           Add Aisle Marker
         </button>
@@ -512,8 +457,16 @@ export default function App() {
         >
           {showWalkable ? "Hide Walkable" : "Toggle Walkable"}
         </button>
-      </div>
 
+        <button 
+          onClick={saveToDatabase} 
+          disabled={isSaving}
+          style={{...btn("#0284c7"), opacity: isSaving ? 0.7 : 1, cursor: isSaving ? "not-allowed" : "pointer", marginLeft: "10px"}}
+        >
+          {isSaving ? "Saving..." : "Save to Database"}
+        </button>
+
+      </div>
 
       <GridCanvas
         grid={gridSize}
@@ -537,11 +490,8 @@ export default function App() {
           setShowModal(true);
         }}
         onSelectElement={(el) => {
-
-          // CREATE NEW AISLE
           if (el.type === "aisle_marker" && el.new) {
             const nearest = getAdjacentRacks(el.x, el.y);
-
             setEditingAisle({
               aisle_name: "",
               x: el.x,
@@ -552,13 +502,11 @@ export default function App() {
             return;
           }
 
-          // JUST SELECT (single click)
           if (el.selectOnly) {
             setSelected(el.id);
             return;
           }
 
-          // DOUBLE CLICK → EDIT
           if (el.type === "aisle_marker") {
             setSelected(el.id);
             setEditingAisle(el);
@@ -572,10 +520,6 @@ export default function App() {
 
           if (el.type === "blocked") {
             setEditingBlocked(el);
-          }
-
-          if (el.type === "aisle_marker") {
-            setEditingAisle(el);
           }
         }}
       />
@@ -591,8 +535,6 @@ export default function App() {
             facing:
               editing.meta?.facing ??
               (editing.meta?.orientation === "vertical" ? "right" : "bottom"),
-
-            // 🔑 THIS IS THE FIX
             total_columns:
               editing.meta?.total_columns ??
               (editing.meta?.orientation === "horizontal"

@@ -43,8 +43,8 @@ export function PaymentHistoryScreen({ onBack }: Props) {
   }, [user?.user_id]);
 
   const totalSpent = payments.reduce((s, p) => s + p.amount, 0);
-  const filteredPayments = payments.filter(p => 
-    p.order_id.toLowerCase().includes(searchTerm.toLowerCase()) || 
+  const filteredPayments = payments.filter(p =>
+    p.order_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.payment_id.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -68,13 +68,13 @@ export function PaymentHistoryScreen({ onBack }: Props) {
         <div className="flex justify-center items-center mt-2">
           <div className="w-full max-w-sm bg-gradient-to-br from-[#FF3347] to-[#FF5566] rounded-3xl p-6 text-white shadow-lg shadow-[#FF3347]/20 relative overflow-hidden">
             <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
-            
+
             <div className="flex flex-col items-center justify-center text-center relative z-10">
               <div className="flex items-center gap-2 mb-2 bg-white/20 px-3 py-1 rounded-full backdrop-blur-md">
                 <TrendingUp className="w-3.5 h-3.5" />
                 <p className="text-[10px] font-bold uppercase tracking-[0.15em]">Total Expenditure</p>
               </div>
-              
+
               <div className="flex items-baseline gap-1">
                 <span className="text-xl font-medium opacity-80">₹</span>
                 <p className="text-4xl font-black tracking-tight">
@@ -87,8 +87,8 @@ export function PaymentHistoryScreen({ onBack }: Props) {
 
         <div className="relative mt-4">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input 
-            placeholder="Search Order or Payment ID..." 
+          <Input
+            placeholder="Search Order or Payment ID..."
             className="pl-10 h-11 bg-accent/30 border-none rounded-xl text-sm"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -113,9 +113,8 @@ export function PaymentHistoryScreen({ onBack }: Props) {
             return (
               <div key={pay.payment_id} className="bg-card border border-border rounded-2xl p-4">
                 <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
-                    isSuccess ? "bg-green-500/5 text-green-600" : "bg-yellow-500/5 text-yellow-600"
-                  }`}>
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${isSuccess ? "bg-green-500/5 text-green-600" : "bg-yellow-500/5 text-yellow-600"
+                    }`}>
                     {isUPI ? <Smartphone className="w-6 h-6" /> : <Banknote className="w-6 h-6" />}
                   </div>
 
@@ -133,8 +132,8 @@ export function PaymentHistoryScreen({ onBack }: Props) {
                           )}
                         </div>
                         <p className="text-[11px] text-muted-foreground mt-0.5">
-                          {new Date(pay.created_at).toLocaleDateString('en-IN', { 
-                            day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+                          {new Date(pay.created_at).toLocaleDateString('en-IN', {
+                            day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
                           })}
                         </p>
                       </div>
@@ -150,9 +149,8 @@ export function PaymentHistoryScreen({ onBack }: Props) {
                           Ref: {pay.payment_id.slice(6)}
                         </p>
                       </div>
-                      <span className={`text-[10px] font-bold uppercase tracking-wider ${
-                        isSuccess ? "text-green-600" : "text-yellow-600"
-                      }`}>
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${isSuccess ? "text-green-600" : "text-yellow-600"
+                        }`}>
                         {pay.status}
                       </span>
                     </div>

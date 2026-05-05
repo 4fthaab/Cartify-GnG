@@ -4,12 +4,11 @@ from datetime import datetime
 
 def get_all_items(store_id: str):
     db = get_db()
-
     items = list(
         db["items"].find(
             {"store_id": store_id},
             {"_id": 0}
-        )
+        ).sort("item_id", 1) 
     )
 
     return items

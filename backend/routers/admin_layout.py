@@ -1,13 +1,9 @@
+# admin_layout.py
 from fastapi import APIRouter, Depends
 from dependencies.admin_dependency import verify_admin_token
 from services.layout_service import get_layout, save_layout
 
 router = APIRouter(prefix="/admin/layout", tags=["Admin Layout"])
-
-
-# ----------------------------------------
-# GET LAYOUT
-# ----------------------------------------
 
 @router.get("/")
 def fetch_layout(admin=Depends(verify_admin_token)):
@@ -19,15 +15,11 @@ def fetch_layout(admin=Depends(verify_admin_token)):
             "layout": None
         }
 
+    # Reverted: Just send the flat layout document directly!
     return {
         "status": "success",
-        "layout": layout.get("layout_data")
+        "layout": layout 
     }
-
-
-# ----------------------------------------
-# SAVE LAYOUT
-# ----------------------------------------
 
 @router.post("/save")
 def store_layout(payload: dict, admin=Depends(verify_admin_token)):

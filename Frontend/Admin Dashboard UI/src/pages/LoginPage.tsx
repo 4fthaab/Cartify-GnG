@@ -15,14 +15,13 @@ export default function LoginPage() {
     setError('');
     setIsLoading(true);
 
-    // Small artificial delay for UX
-    await new Promise((r) => setTimeout(r, 600));
-
-    const success = login(username, password);
+    // Call the real backend via AuthContext
+    // Note: 'username' state is being passed as 'email' to match your backend
+    const result = await login(username, password);
     setIsLoading(false);
 
-    if (!success) {
-      setError('Invalid username or password. Please try again.');
+    if (!result.success) {
+      setError(result.message || 'Invalid credentials. Please try again.');
       setIsShaking(true);
       setTimeout(() => setIsShaking(false), 500);
     }

@@ -46,7 +46,7 @@ export function HomeScreen({ onNavigate, cartItems, isDarkMode, onToggleTheme, i
     fetchOffers();
   }, []);
 
-//Logout Section
+  //Logout Section
   const handleLogout = async () => {
     const cartSession = JSON.parse(localStorage.getItem("cart_session") || "{}");
 
@@ -62,12 +62,12 @@ export function HomeScreen({ onNavigate, cartItems, isDarkMode, onToggleTheme, i
         //Abort logout if the backend rejects it
         if (data.error) {
           alert(data.error);
-          return; 
+          return;
         }
       } catch (err) {
         console.error("Failed to logout cart on backend", err);
         alert("Network error. Please try again.");
-        return; 
+        return;
       }
     }
     localStorage.removeItem("user");        // Clearlocal storage to reset user state

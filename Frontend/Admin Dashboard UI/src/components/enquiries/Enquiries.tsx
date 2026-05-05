@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Trash2, Search, Star, AlertTriangle, CheckCircle, Clock, Eye } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -6,10 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Badge } from '../ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
+import { adminService } from '../../services/adminServices'; // Adjust path if needed
 
 // Types 
 interface Enquiry {
-  id: number;
+  id: string; // Changed to string for MongoDB _id
   name: string;
   email: string;
   avatar: string;
@@ -23,7 +24,7 @@ interface Enquiry {
 type ComplaintStatus = 'Open' | 'In Progress' | 'Resolved';
 
 interface Complaint {
-  id: number;
+  id: string; // Changed to string for issue_id (e.g., "ISS1772543699")
   name: string;
   email: string;
   subject: string;
@@ -32,62 +33,7 @@ interface Complaint {
   date: string;
 }
 
-// Static data 
-const initialEnquiries: Enquiry[] = [
-  {
-    id: 1, name: 'Afthab Rahman', email: 'afthab@example.com',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop',
-    review: 'Great effort! Saved my time by 3 times lesser for searching items.',
-    service: 5, website: 4, overall: 2, date: '2025-10-05',
-  },
-  {
-    id: 2, name: 'Akshay', email: 'akshay@example.com',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop',
-    review: 'I find this supermarket assistant website incredibly useful and easy to navigate. The ability to search for item locations, create shopping lists, and explore offers makes my shopping experience much more convenient.',
-    service: 5, website: 4, overall: 5, date: '2025-10-04',
-  },
-  {
-    id: 3, name: 'OXY SCOOBY', email: 'oxyscooby@example.com',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop',
-    review: 'Amazing Experience.... Keep it up!',
-    service: 4, website: 5, overall: 5, date: '2025-10-03',
-  },
-];
-
-const initialComplaints: Complaint[] = [
-  {
-    id: 1, name: 'Rahul Menon', email: 'rahul.menon@example.com',
-    subject: 'Wrong item location shown',
-    description: 'The app directed me to Rack B3 for milk but it was actually at Rack A1. Wasted 10 minutes searching. Please fix the map data.',
-    status: 'Open', date: '2025-10-08',
-  },
-  {
-    id: 2, name: 'Priya Nair', email: 'priya.nair@example.com',
-    subject: 'Offer not applied at checkout',
-    description: 'The "Buy 1 Get 1 Free" offer for snacks was showing on the website but was not applied when I checked out. I had to pay full price.',
-    status: 'In Progress', date: '2025-10-07',
-  },
-  {
-    id: 3, name: 'Sreekanth V', email: 'sreekanth.v@example.com',
-    subject: 'App crashes on search',
-    description: 'When I search for items with Malayalam text the app sometimes crashes. This happens consistently with "ഉരുളക്കിഴങ്ങ്".',
-    status: 'In Progress', date: '2025-10-06',
-  },
-  {
-    id: 4, name: 'Anjali Das', email: 'anjali.das@example.com',
-    subject: 'Product price mismatch',
-    description: 'The website shows coconut oil at ₹380 but the shelf price is ₹420. Prices should be updated regularly.',
-    status: 'Resolved', date: '2025-10-04',
-  },
-  {
-    id: 5, name: 'Mohammed Fariz', email: 'fariz@example.com',
-    subject: 'Shopping list not saving',
-    description: 'I created a shopping list with 8 items but after closing the app and reopening it the list was empty. Lost all my data.',
-    status: 'Open', date: '2025-10-03',
-  },
-];
-
-// Status config (no priority) 
+// Status config
 const statusConfig: Record<ComplaintStatus, { icon: React.ElementType; style: React.CSSProperties }> = {
   Open:        { icon: AlertTriangle, style: { background: 'rgba(239,68,68,0.12)',  color: '#f87171', border: '1px solid rgba(239,68,68,0.35)'  } },
   'In Progress': { icon: Clock,       style: { background: 'rgba(234,179,8,0.12)', color: '#fbbf24', border: '1px solid rgba(234,179,8,0.35)'  } },
@@ -112,30 +58,109 @@ function StarRating({ rating }: { rating: number }) {
   );
 }
 
-
 // Main component 
 export default function Enquiries() {
-  // Reviews state
-  const [enquiries, setEnquiries] = useState<Enquiry[]>(initialEnquiries);
-  const [reviewSearch, setReviewSearch] = useState('');
+  // Dynamic States
+  const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Complaints state
-  const [complaints, setComplaints] = useState<Complaint[]>(initialComplaints);
+  // Search/Filter States
+  const [reviewSearch, setReviewSearch] = useState('');
   const [complaintSearch, setComplaintSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<ComplaintStatus | 'All'>('All');
   const [viewingComplaint, setViewingComplaint] = useState<Complaint | null>(null);
 
-  // Reviews helpers
+  // --- 1. FETCH DATA ON MOUNT ---
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [ratingsRes, issuesRes] = await Promise.all([
+          adminService.getStoreRatings(),
+          adminService.getIssues()
+        ]);
+
+        if (ratingsRes.status === 'success') {
+          // Map backend ratings schema to UI format
+          const mappedRatings = ratingsRes.ratings.map((r: any) => ({
+            id: r._id?.$oid || Math.random().toString(), 
+            name: r.user_id || 'Anonymous',
+            email: `User ID: ${r.user_id || 'Unknown'}`,
+            review: r.review || "No feedback text provided.",
+            overall: r.rating || 5,
+            service: r.rating || 5, // Copied from overall rating to keep UI full
+            website: r.rating || 5, // Copied from overall rating to keep UI full
+            date: new Date(r.created_at).toLocaleDateString(),
+            avatar: `https://ui-avatars.com/api/?name=${r.user_id || 'User'}&background=random`
+          }));
+          setEnquiries(mappedRatings);
+        }
+
+        if (issuesRes.status === 'success') {
+          // Map backend issues schema to UI format
+          const mappedIssues = issuesRes.issues.map((i: any) => ({
+            id: i.issue_id,
+            name: i.user_id || "Guest",
+            email: `User ID: ${i.user_id || 'Guest'}`,
+            subject: i.subject || "General Issue",
+            description: i.description || "No description provided.",
+            status: i.status === 'open' ? 'Open' : (i.status === 'resolved' ? 'Resolved' : 'In Progress'),
+            date: new Date(i.created_at).toLocaleDateString()
+          }));
+          setComplaints(mappedIssues);
+        }
+      } catch (err) {
+        console.error("Failed to load enquiries", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  // --- 2. BACKEND HANDLERS ---
+  const handleStatusChange = async (id: string, status: ComplaintStatus) => {
+    // Map UI status back to backend 'open'/'resolved'/'in_progress'
+    const backendStatus = status.toLowerCase().replace(" ", "_");
+    
+    try {
+      const res = await adminService.updateIssue(id, { status: backendStatus });
+      if (res.status === 'success') {
+        // Update Local State
+        setComplaints((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)));
+        setViewingComplaint((prev) => (prev?.id === id ? { ...prev, status } : prev));
+      }
+    } catch (err) {
+      console.error("Failed to update status", err);
+    }
+  };
+
+  const handleDeleteComplaint = (id: string) => {
+    if (window.confirm("Remove this complaint record?")) {
+      // NOTE: You can add an adminService.deleteIssue(id) call here later if your backend supports it.
+      setComplaints((prev) => prev.filter((c) => c.id !== id));
+      if (viewingComplaint?.id === id) setViewingComplaint(null);
+    }
+  };
+
+  const handleDeleteReview = (id: string) => {
+    if (window.confirm("Remove this review?")) {
+      // NOTE: You can add an adminService.deleteRating(id) call here later if your backend supports it.
+      setEnquiries((prev) => prev.filter((e) => e.id !== id));
+    }
+  };
+
+  // --- HELPERS ---
   const filteredReviews = enquiries.filter((e) =>
     e.name.toLowerCase().includes(reviewSearch.toLowerCase()) ||
     e.email.toLowerCase().includes(reviewSearch.toLowerCase()) ||
     e.review.toLowerCase().includes(reviewSearch.toLowerCase())
   );
+  
   const avgOverall = enquiries.length > 0
     ? (enquiries.reduce((sum, e) => sum + e.overall, 0) / enquiries.length).toFixed(1)
     : '0';
 
-  // Complaints helpers
   const filteredComplaints = complaints.filter((c) => {
     const matchSearch =
       c.name.toLowerCase().includes(complaintSearch.toLowerCase()) ||
@@ -143,21 +168,16 @@ export default function Enquiries() {
       c.email.toLowerCase().includes(complaintSearch.toLowerCase());
     return matchSearch && (filterStatus === 'All' || c.status === filterStatus);
   });
+
   const counts = {
     Open:          complaints.filter((c) => c.status === 'Open').length,
     'In Progress': complaints.filter((c) => c.status === 'In Progress').length,
     Resolved:      complaints.filter((c) => c.status === 'Resolved').length,
   };
 
-  const handleDeleteReview = (id: number) => setEnquiries((prev) => prev.filter((e) => e.id !== id));
-  const handleDeleteComplaint = (id: number) => {
-    setComplaints((prev) => prev.filter((c) => c.id !== id));
-    if (viewingComplaint?.id === id) setViewingComplaint(null);
-  };
-  const handleStatusChange = (id: number, status: ComplaintStatus) => {
-    setComplaints((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)));
-    setViewingComplaint((prev) => (prev?.id === id ? { ...prev, status } : prev));
-  };
+  if (isLoading) {
+    return <div className="text-white text-center py-20 text-lg">Loading Enquiries...</div>;
+  }
 
   return (
     <div className="space-y-12">
@@ -441,7 +461,6 @@ export default function Enquiries() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
     </div>
   );
 }

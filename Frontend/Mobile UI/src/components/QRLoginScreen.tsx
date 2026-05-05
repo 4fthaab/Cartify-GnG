@@ -29,11 +29,11 @@ export function QRLoginScreen({ onLogin }: QRLoginScreenProps) {
     setError("");
 
     // Frontend Validation
-    
+
     // Checking for Empty Fields
     if (!emailOrPhone || !password || (!isLogin && !name)) {
       setError("Please fill in all required fields.");
-      return; 
+      return;
     }
 
     //Signup Constraints
@@ -42,7 +42,7 @@ export function QRLoginScreen({ onLogin }: QRLoginScreenProps) {
         setError("Password must be at least 8 characters long.");
         return;
       }
-      
+
       if (!isValidEmail(emailOrPhone) && !isValidPhone(emailOrPhone)) {
         setError("Please enter a valid email or a 10-digit phone number.");
         return;
@@ -126,7 +126,7 @@ export function QRLoginScreen({ onLogin }: QRLoginScreenProps) {
   const getBorderClass = (fieldValue: string, isFieldInvalid?: boolean) => {
     const baseClass = "h-12 rounded-xl transition-colors";
     const errorClass = "border-red-500 focus-visible:ring-red-500";
-    
+
     // Show red if submitted and field is empty or fails at specific validation
     if (attemptedSubmit && (!fieldValue || isFieldInvalid)) {
       return `${baseClass} ${errorClass}`;

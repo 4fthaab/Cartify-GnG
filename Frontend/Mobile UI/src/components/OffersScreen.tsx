@@ -20,7 +20,7 @@ export function OffersScreen({ onBack }: OffersScreenProps) {
   const [points, setPoints] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  const NEXT_REWARD_POINTS = 3000; 
+  const NEXT_REWARD_POINTS = 3000;
 
   useEffect(() => {
     const fetchData = async () => {
