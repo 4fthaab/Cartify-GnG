@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://10.211.103.220:8000', // Make sure this matches your FastAPI port!
+  baseURL: 'http://10.68.201.220:8000', // Make sure this matches your FastAPI port!
   headers: {
     'Content-Type': 'application/json',
   },

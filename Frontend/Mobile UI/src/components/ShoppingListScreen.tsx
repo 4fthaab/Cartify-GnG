@@ -8,7 +8,7 @@ interface ShoppingListScreenProps {
   onBack: () => void;
 }
 
-const API_BASE = "http://10.211.103.220:8000";
+const API_BASE = "http://10.68.201.220:8000";
 
 export function ShoppingListScreen({ onBack }: ShoppingListScreenProps) {
 

@@ -35,17 +35,17 @@ interface Complaint {
 
 // Status config
 const statusConfig: Record<ComplaintStatus, { icon: React.ElementType; style: React.CSSProperties }> = {
-  Open:        { icon: AlertTriangle, style: { background: 'rgba(239,68,68,0.12)',  color: '#f87171', border: '1px solid rgba(239,68,68,0.35)'  } },
-  'In Progress': { icon: Clock,       style: { background: 'rgba(234,179,8,0.12)', color: '#fbbf24', border: '1px solid rgba(234,179,8,0.35)'  } },
-  Resolved:    { icon: CheckCircle,   style: { background: 'rgba(34,197,94,0.12)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.35)'  } },
+  Open: { icon: AlertTriangle, style: { background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.35)' } },
+  'In Progress': { icon: Clock, style: { background: 'rgba(234,179,8,0.12)', color: '#fbbf24', border: '1px solid rgba(234,179,8,0.35)' } },
+  Resolved: { icon: CheckCircle, style: { background: 'rgba(34,197,94,0.12)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.35)' } },
 };
 
 function StarRating({ rating }: { rating: number }) {
   return (
     <div className="flex gap-0.5">
       {[1, 2, 3, 4, 5].map((star) => (
-        <Star 
-          key={star} 
+        <Star
+          key={star}
           className="w-3.5 h-3.5"
           style={{
             color: star <= rating ? '#facc15' : '#475569',
@@ -70,6 +70,7 @@ export default function Enquiries() {
   const [complaintSearch, setComplaintSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<ComplaintStatus | 'All'>('All');
   const [viewingComplaint, setViewingComplaint] = useState<Complaint | null>(null);
+  const randomNames = ['Alex', 'Jordan', 'Taylor', 'Morgan', 'Casey', 'Riley', 'Sam', 'Jamie', 'Quinn', 'Avery'];
 
   // --- 1. FETCH DATA ON MOUNT ---
   useEffect(() => {
@@ -83,8 +84,8 @@ export default function Enquiries() {
         if (ratingsRes.status === 'success') {
           // Map backend ratings schema to UI format
           const mappedRatings = ratingsRes.ratings.map((r: any) => ({
-            id: r._id?.$oid || Math.random().toString(), 
-            name: r.user_id || 'Anonymous',
+            id: r._id?.$oid || Math.random().toString(),
+            name: randomNames[Math.floor(Math.random() * randomNames.length)],
             email: `User ID: ${r.user_id || 'Unknown'}`,
             review: r.review || "No feedback text provided.",
             overall: r.rating || 5,
@@ -122,7 +123,7 @@ export default function Enquiries() {
   const handleStatusChange = async (id: string, status: ComplaintStatus) => {
     // Map UI status back to backend 'open'/'resolved'/'in_progress'
     const backendStatus = status.toLowerCase().replace(" ", "_");
-    
+
     try {
       const res = await adminService.updateIssue(id, { status: backendStatus });
       if (res.status === 'success') {
@@ -156,7 +157,7 @@ export default function Enquiries() {
     e.email.toLowerCase().includes(reviewSearch.toLowerCase()) ||
     e.review.toLowerCase().includes(reviewSearch.toLowerCase())
   );
-  
+
   const avgOverall = enquiries.length > 0
     ? (enquiries.reduce((sum, e) => sum + e.overall, 0) / enquiries.length).toFixed(1)
     : '0';
@@ -170,9 +171,9 @@ export default function Enquiries() {
   });
 
   const counts = {
-    Open:          complaints.filter((c) => c.status === 'Open').length,
+    Open: complaints.filter((c) => c.status === 'Open').length,
     'In Progress': complaints.filter((c) => c.status === 'In Progress').length,
-    Resolved:      complaints.filter((c) => c.status === 'Resolved').length,
+    Resolved: complaints.filter((c) => c.status === 'Resolved').length,
   };
 
   if (isLoading) {
@@ -294,9 +295,8 @@ export default function Enquiries() {
               <button
                 key={status}
                 onClick={() => setFilterStatus(isActive ? 'All' : status)}
-                className={`flex items-center gap-3 p-4 rounded-xl border transition-all hover:scale-[1.02] active:scale-95 ${
-                  isActive ? 'bg-slate-700/80 border-slate-500 shadow-lg' : 'bg-slate-800/40 border-slate-700 hover:border-slate-600'
-                }`}
+                className={`flex items-center gap-3 p-4 rounded-xl border transition-all hover:scale-[1.02] active:scale-95 ${isActive ? 'bg-slate-700/80 border-slate-500 shadow-lg' : 'bg-slate-800/40 border-slate-700 hover:border-slate-600'
+                  }`}
               >
                 <Icon className="w-5 h-5" style={{ color: style.color as string }} />
                 <div className="text-left">
