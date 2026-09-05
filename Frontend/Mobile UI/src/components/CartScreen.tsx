@@ -6,7 +6,7 @@ import { Html5Qrcode } from "html5-qrcode";
 
 import paymentTune from '../../assets/paytm_payment_tune.mp3';
 
-const API_BASE = "http://10.68.201.220:8000";
+const API_BASE = "http://10.168.168.220:8000";
 
 interface CartScreenProps {
   onBack: () => void;

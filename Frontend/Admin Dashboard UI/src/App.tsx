@@ -18,7 +18,6 @@ import AddProductModal from './components/database/AddProductModal';
 import Enquiries from './components/enquiries/Enquiries';
 import OrderPage from './components/orders/OrdersPage.js';
 
-
 export default function App() {
   const { isAuthenticated, logout, adminData } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');

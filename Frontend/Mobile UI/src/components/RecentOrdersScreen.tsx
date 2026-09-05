@@ -13,7 +13,7 @@ interface Props {
   onBack: () => void;
 }
 
-const API_BASE = "http://10.68.201.220:8000";
+const API_BASE = "http://10.168.168.220:8000";
 
 export function RecentOrdersScreen({ onBack }: Props) {
   const [orders, setOrders] = useState<any[]>([]);

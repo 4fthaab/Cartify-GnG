@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { HelpCircle, X, AlertTriangle, Send, Loader2, CheckCircle2 } from "lucide-react";
 
-const BASE_URL = "http://10.68.201.220:8000";
+const BASE_URL = "http://localhost:8000";
 
 export const HelpModal = () => {
   const [isOpen, setIsOpen] = useState(false);
